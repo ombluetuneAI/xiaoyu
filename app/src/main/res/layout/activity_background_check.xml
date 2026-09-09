@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="@color/xiaoyu_bg" android:orientation="vertical" android:padding="16dp">
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:text="后台能力检测" android:textColor="@color/xiaoyu_text" android:textSize="18sp"/>
+    <TextView android:id="@+id/checkBattery" android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="8dp" android:textColor="@color/xiaoyu_warn"/>
+    <TextView android:id="@+id/checkAutostart" android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="8dp" android:textColor="@color/xiaoyu_warn"/>
+    <TextView android:id="@+id/checkMicFgs" android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="8dp" android:textColor="@color/xiaoyu_primary"/>
+    <TextView android:id="@+id/checkNotification" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:padding="8dp" android:textColor="@color/xiaoyu_warn" android:textSize="13sp"/>
+    <Button android:id="@+id/btnBattery" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="申请电池无限制"/>
+    <Button android:id="@+id/btnRomAutostart" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="跳转自启动设置（小米/OPPO/vivo）"/>
+    <Button android:id="@+id/btnJumpSettings" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="应用详情设置"/>
+    <Button android:id="@+id/btnDone" style="@style/Widget.Material3.Button.OutlinedButton"
+        android:layout_width="match_parent" android:layout_height="wrap_content" android:text="完成"/>
+</LinearLayout>

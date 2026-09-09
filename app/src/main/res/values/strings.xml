@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">小鱼助手</string>
+    <string name="wake_hint">说「小鱼同学」唤醒</string>
+    <string name="activation_title">绑定小智设备</string>
+    <string name="open_console">打开智控台</string>
+    <string name="bind_done">我已完成绑定</string>
+    <string name="copy_code">复制激活码</string>
+    <string name="copy_mac">复制 MAC</string>
+    <string name="settings">设置</string>
+    <string name="voice_home_title">🐟 小鱼同学</string>
+    <string name="voice_home_wake">点击唤醒（或说「小鱼同学」）</string>
+    <string name="voice_home_play">播放音乐</string>
+    <string name="now_playing">正在播放</string>
+    <string name="queue_title">📋 播放列表</string>
+    <string name="cover_art">专辑封面</string>
+    <string name="player_previous">上一首</string>
+    <string name="player_play">播放</string>
+    <string name="player_pause">暂停</string>
+    <string name="player_next">下一首</string>
+</resources>

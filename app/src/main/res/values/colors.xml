@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="xiaoyu_bg">#0f1419</color>
+    <color name="xiaoyu_surface">#1a2332</color>
+    <color name="xiaoyu_primary">#5eead4</color>
+    <color name="xiaoyu_text">#e8eef7</color>
+    <color name="xiaoyu_muted">#8b9bb8</color>
+    <color name="xiaoyu_warn">#fbbf24</color>
+    <color name="xiaoyu_danger">#f87171</color>
+</resources>

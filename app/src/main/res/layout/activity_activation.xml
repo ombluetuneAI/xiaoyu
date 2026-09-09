@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/xiaoyu_bg">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/activation_title"
+            android:textColor="@color/xiaoyu_text"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="请打开 xiaozhi.me 智控台，添加设备并输入激活码"
+            android:textColor="@color/xiaoyu_muted" />
+
+        <TextView
+            android:id="@+id/activationCode"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:background="@color/xiaoyu_surface"
+            android:gravity="center"
+            android:padding="20dp"
+            android:textColor="@color/xiaoyu_primary"
+            android:textSize="32sp"
+            android:letterSpacing="0.2" />
+
+        <Button android:id="@+id/btnCopyCode" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="8dp" android:text="@string/copy_code" />
+
+        <TextView
+            android:id="@+id/activationMac"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:textColor="@color/xiaoyu_muted" />
+
+        <Button android:id="@+id/btnCopyMac" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="@string/copy_mac" />
+
+        <Button android:id="@+id/btnOpenConsole" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="16dp" android:text="@string/open_console" />
+
+        <Button android:id="@+id/btnBindDone" style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="@string/bind_done" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:gravity="center"
+            android:text="每 5 秒自动检查绑定状态…"
+            android:textColor="@color/xiaoyu_muted"
+            android:textSize="12sp" />
+    </LinearLayout>
+</ScrollView>

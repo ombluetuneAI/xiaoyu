@@ -1,0 +1,7 @@
+## local.properties（勿提交 Git）
+
+在 Android Studio 中打开本项目会自动生成 `local.properties`，或手动创建：
+
+```properties
+sdk.dir=C\:\\Users\\YOUR_USER\\AppData\\Local\\Android\\Sdk
+```

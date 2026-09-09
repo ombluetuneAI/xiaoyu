@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Xiaoyu" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="colorPrimary">@color/xiaoyu_primary</item>
+        <item name="android:statusBarColor">@color/xiaoyu_bg</item>
+        <item name="android:navigationBarColor">@color/xiaoyu_bg</item>
+        <item name="android:windowBackground">@color/xiaoyu_bg</item>
+    </style>
+</resources>

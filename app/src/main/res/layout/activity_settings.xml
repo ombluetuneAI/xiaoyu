@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/xiaoyu_bg">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical" android:padding="16dp">
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="@string/settings" android:textColor="@color/xiaoyu_text" android:textSize="20sp"/>
+        <TextView android:id="@+id/nowPlayingRow" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:padding="12dp" android:textColor="@color/xiaoyu_primary" android:visibility="gone"/>
+        <TextView android:id="@+id/rowBind" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:padding="12dp" android:text="小智设备绑定" android:textColor="@color/xiaoyu_text"/>
+        <TextView android:id="@+id/bindSummary" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:paddingStart="12dp" android:textColor="@color/xiaoyu_muted" android:textSize="12sp"/>
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:padding="12dp">
+            <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+                android:text="后台语音服务" android:textColor="@color/xiaoyu_text"/>
+            <Switch android:id="@+id/switchBackgroundVoice" android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+        </LinearLayout>
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:padding="12dp">
+            <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+                android:text="连续对话" android:textColor="@color/xiaoyu_text"/>
+            <Switch android:id="@+id/switchContinuous" android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+        </LinearLayout>
+        <TextView android:id="@+id/rowBackground" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:padding="12dp" android:text="后台能力检测" android:textColor="@color/xiaoyu_text"/>
+        <TextView android:id="@+id/rowTxb" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:padding="12dp" android:text="音乐服务 TXB" android:textColor="@color/xiaoyu_text"/>
+        <TextView android:id="@+id/rowAdapters" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:padding="12dp" android:text="接入 App 管理" android:textColor="@color/xiaoyu_text"/>
+        <TextView android:id="@+id/rowStartService" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:padding="12dp" android:text="启动语音服务（调试）" android:textColor="@color/xiaoyu_primary"/>
+        <TextView android:id="@+id/rowTestPlay" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:padding="12dp" android:text="测试播放（调试）" android:textColor="@color/xiaoyu_primary"/>
+    </LinearLayout>
+</ScrollView>

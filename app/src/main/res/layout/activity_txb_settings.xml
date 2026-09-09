@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="@color/xiaoyu_bg" android:orientation="vertical" android:padding="16dp">
+    <EditText android:id="@+id/txbInput" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:hint="http://192.168.10.138:10074/api" android:textColor="@color/xiaoyu_text"/>
+    <TextView android:id="@+id/txbHint" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="8dp" android:textColor="@color/xiaoyu_warn" android:textSize="12sp"/>
+    <Button android:id="@+id/txbSave" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="16dp" android:text="保存"/>
+</LinearLayout>

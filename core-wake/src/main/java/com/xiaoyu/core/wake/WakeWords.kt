@@ -1,0 +1,74 @@
+package com.xiaoyu.core.wake
+
+import android.content.Context
+
+object WakeWords {
+    const val PRIMARY = "小鱼同学"
+    const val DEFAULT: String = PRIMARY
+
+    @Volatile
+    private var configured: List<String> = listOf(PRIMARY)
+
+    val ALL: List<String>
+        get() = configured
+
+    fun configure(words: List<String>) {
+        val cleaned = words.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+        if (cleaned.isNotEmpty()) {
+            configured = cleaned
+        }
+    }
+
+    /** 从 Sherpa keywords.txt 解析 @ 后缀中文唤醒词 */
+    fun parseFromKeywordsFile(content: String): List<String> {
+        return content.lineSequence()
+            .map { it.trim().trimStart('\uFEFF') }
+            .filter { it.isNotEmpty() && it.contains("@") }
+            .mapNotNull { line ->
+                line.substringAfterLast("@").trim().takeIf { it.isNotEmpty() }
+            }
+            .distinct()
+            .toList()
+    }
+
+    fun loadFromAsset(context: Context, assetPath: String): Boolean {
+        return try {
+            val text = context.assets.open(assetPath).bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val words = parseFromKeywordsFile(text)
+            if (words.isNotEmpty()) configure(words)
+            words.isNotEmpty()
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    fun hasUtf8Bom(context: Context, assetPath: String): Boolean {
+        return try {
+            context.assets.open(assetPath).use { input ->
+                val header = ByteArray(3)
+                input.read(header) == 3 &&
+                    header[0] == 0xEF.toByte() &&
+                    header[1] == 0xBB.toByte() &&
+                    header[2] == 0xBF.toByte()
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /** Sherpa getResult().keyword 可能带 : / @ 前缀，或仅为中文唤醒词 */
+    fun normalize(raw: String): String {
+        val trimmed = raw.trim().removePrefix(":").removePrefix("@")
+        ALL.firstOrNull { word -> trimmed == word || trimmed.endsWith(word) }?.let { return it }
+        return DEFAULT
+    }
+
+    fun isEcho(text: String): Boolean {
+        val normalized = text.trim().trimEnd('?', '？', '。', '.', ' ', '\uFFFD')
+        for (word in ALL) {
+            if (normalized == word) return true
+            if (normalized.startsWith(word) && normalized.length <= word.length + 2) return true
+        }
+        return false
+    }
+}
