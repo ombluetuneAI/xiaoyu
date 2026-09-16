@@ -51,6 +51,16 @@ class XiaozhiVoiceClient(
     @Volatile
     private var acceptServerTts = true
 
+    @Volatile
+    private var lastInboundMs: Long = 0L
+
+    @Volatile
+    private var serverHelloReceived = false
+
+    /** 唤醒后忽略服务端寒暄 TTS，直到用户说出非唤醒词内容 */
+    @Volatile
+    private var suppressWakeGreetingTts = false
+
     val audioPipeline = OpusVoicePipeline()
 
     private val _events = MutableSharedFlow<VoiceEvent>(extraBufferCapacity = 64)
@@ -85,6 +95,8 @@ class XiaozhiVoiceClient(
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 connected.set(true)
                 reconnectAttempt = 0
+                serverHelloReceived = false
+                lastInboundMs = System.currentTimeMillis()
                 audioPipeline.attach(webSocket)
                 sendHello()
                 _events.tryEmit(VoiceEvent.Connected)
@@ -92,12 +104,14 @@ class XiaozhiVoiceClient(
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
+                markInbound()
                 handleMessage(text)
             }
 
             override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
+                markInbound()
                 if (!listening.get()) {
-                    if (!acceptServerTts) return
+                    if (!acceptServerTts || suppressWakeGreetingTts) return
                     audioPipeline.playDownlink(bytes.toByteArray())
                 }
             }
@@ -116,10 +130,36 @@ class XiaozhiVoiceClient(
     private fun onDisconnected(reason: String) {
         connected.set(false)
         listening.set(false)
+        serverHelloReceived = false
+        suppressWakeGreetingTts = false
         audioPipeline.detach()
         _events.tryEmit(VoiceEvent.Disconnected(reason))
         Log.w(TAG, "WS disconnected: $reason")
         scheduleReconnect()
+    }
+
+    private fun markInbound() {
+        lastInboundMs = System.currentTimeMillis()
+    }
+
+    /** 长时间无下行时主动重连，避免 connected=true 的僵死 WS */
+    fun reconnectIfStale(maxIdleMs: Long = STALE_WS_IDLE_MS) {
+        if (!connected.get()) return
+        val last = lastInboundMs
+        if (last <= 0L) return
+        val idle = System.currentTimeMillis() - last
+        if (idle < maxIdleMs) return
+        Log.i(TAG, "WS stale ${idle}ms, reconnecting before session")
+        disconnect(manual = false)
+    }
+
+    suspend fun awaitServerHello(timeoutMs: Long = 12_000L): Boolean {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            if (connected.get() && serverHelloReceived) return true
+            delay(50)
+        }
+        return connected.get() && serverHelloReceived
     }
 
     private fun scheduleReconnect() {
@@ -145,7 +185,16 @@ class XiaozhiVoiceClient(
         webSocket = null
         connected.set(false)
         listening.set(false)
+        serverHelloReceived = false
+        suppressWakeGreetingTts = false
         audioPipeline.detach()
+    }
+
+    /** 结束本轮语音会话并断开 WS（与开麦/upload 同生命周期） */
+    fun endSessionAndDisconnect(reason: String = "user_idle") {
+        endSessionQuietly(reason)
+        disconnect(manual = true)
+        Log.i(TAG, "voice session closed, WS disconnected reason=$reason")
     }
 
     fun isConnected(): Boolean = connected.get()
@@ -170,16 +219,13 @@ class XiaozhiVoiceClient(
             Log.w(TAG, "startListening skipped: WS not connected")
             return
         }
-        acceptServerTts = true
-        if (fromWake) {
-            sendRaw(
-                JSONObject()
-                    .put("session_id", "")
-                    .put("type", "listen")
-                    .put("state", "detect")
-                    .put("text", wakeWord),
-            )
+        if (!serverHelloReceived) {
+            Log.w(TAG, "startListening skipped: server hello not ready")
+            return
         }
+        acceptServerTts = true
+        suppressWakeGreetingTts = fromWake
+        // 不上报 listen/detect：云端常对唤醒词直接寒暄 TTS；仅 listen/start 开麦即可
         sendRaw(
             JSONObject()
                 .put("session_id", "")
@@ -190,7 +236,7 @@ class XiaozhiVoiceClient(
         audioPipeline.startCapture()
         listening.set(true)
         _events.tryEmit(VoiceEvent.ListeningStarted)
-        Log.i(TAG, "listen/start mode=auto fromWake=$fromWake wakeWord=$wakeWord")
+        Log.i(TAG, "listen/start mode=auto fromWake=$fromWake wakeWord=$wakeWord suppressGreeting=$suppressWakeGreetingTts")
     }
 
     fun stopListening() {
@@ -214,6 +260,7 @@ class XiaozhiVoiceClient(
     /** 空闲/手动退出：abort 会话并丢弃后续服务端 TTS，避免「再见」类播报 */
     fun endSessionQuietly(reason: String = "user_idle") {
         acceptServerTts = false
+        suppressWakeGreetingTts = false
         audioPipeline.stopPlayback()
         if (connected.get()) {
             sendRaw(
@@ -234,6 +281,7 @@ class XiaozhiVoiceClient(
                 val audioParams = json.optJSONObject("audio_params")
                 val sampleRate = audioParams?.optInt("sample_rate", 24000) ?: 24000
                 audioPipeline.configureDownlink(sampleRate)
+                serverHelloReceived = true
                 Log.i(TAG, "server hello audio sample_rate=$sampleRate")
             }
             "mcp" -> handleMcp(json.optJSONObject("payload") ?: JSONObject())
@@ -244,14 +292,29 @@ class XiaozhiVoiceClient(
                         listening.set(false)
                         _events.tryEmit(VoiceEvent.VadEnd)
                         Log.i(TAG, "server listen/stop (VAD end)")
+                        if (suppressWakeGreetingTts) {
+                            suppressWakeGreetingTts = false
+                            Log.i(TAG, "wake greeting suppress cleared after VAD end")
+                        }
                     }
                 }
             }
             "tts" -> {
                 val state = json.optString("state")
-                if (state == "start") {
+                when (state) {
+                    "sentence_start" -> {
+                        val ttsText = json.optString("text").trim()
+                        if (ttsText.isNotEmpty()) {
+                            Log.i(TAG, "tts sentence: $ttsText")
+                        }
+                    }
+                    "start" -> {
                     if (!acceptServerTts) {
                         Log.i(TAG, "ignore tts/start: session inactive")
+                        return
+                    }
+                    if (suppressWakeGreetingTts) {
+                        Log.i(TAG, "ignore tts/start: wake greeting suppressed until user speaks")
                         return
                     }
                     // 协议：listening 期间忽略下行音频；收到 tts/start 须先停麦再播 TTS
@@ -260,15 +323,21 @@ class XiaozhiVoiceClient(
                     onTtsStart?.invoke()
                     _events.tryEmit(VoiceEvent.TtsStart)
                     Log.i(TAG, "tts/start -> capture stopped, downlink enabled")
-                }
-                if (state == "stop") {
+                    }
+                    "stop" -> {
                     if (!acceptServerTts) {
                         Log.i(TAG, "ignore tts/stop: session inactive")
+                        return
+                    }
+                    if (suppressWakeGreetingTts) {
+                        Log.i(TAG, "ignore tts/stop: wake greeting suppressed")
                         return
                     }
                     audioPipeline.stopPlayback()
                     onTtsComplete?.invoke()
                     _events.tryEmit(VoiceEvent.TtsComplete)
+                    Log.i(TAG, "tts/stop")
+                    }
                 }
             }
             "stt" -> {
@@ -279,6 +348,7 @@ class XiaozhiVoiceClient(
                     Log.i(TAG, "ignore wake-word echo STT: $sttText")
                     return
                 }
+                suppressWakeGreetingTts = false
                 if (listening.get()) {
                     audioPipeline.stopCapture()
                     listening.set(false)
@@ -339,6 +409,7 @@ class XiaozhiVoiceClient(
     companion object {
         private const val TAG = "XiaozhiVoiceClient"
         const val DEFAULT_WAKE_WORD = WakeWords.DEFAULT
+        const val STALE_WS_IDLE_MS = 90_000L
     }
 }
 

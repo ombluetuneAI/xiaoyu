@@ -14,6 +14,12 @@ import com.xiaoyu.core.media.PlaybackMode
 
 import com.xiaoyu.core.media.Track
 
+import com.xiaoyu.core.media.VolumeController
+
+import com.xiaoyu.core.media.VolumeState
+
+import com.xiaoyu.core.media.api.TxbMusicSource
+
 import com.xiaoyu.core.media.parseTrackFromJson
 
 import com.xiaoyu.core.media.player.MediaPlayerFacade
@@ -51,6 +57,8 @@ class MediaCommandHandler(
     private val linkDispatcher: LinkDispatcher,
 
     private val registry: AppAdapterRegistry,
+
+    private val volumeController: VolumeController,
 
     var onPlaybackError: ((String) -> Unit)? = null,
 
@@ -110,13 +118,24 @@ class MediaCommandHandler(
 
     private suspend fun dispatchTool(name: String, arguments: JSONObject): JSONObject = when (name) {
 
-        "self.xiaoyu.play_general" -> playResolve(mediaResolver.resolveGeneral(arguments.optInt("limit", 30)))
+        "self.xiaoyu.play_general" -> playResolve(
+            mediaResolver.resolveGeneral(
+                arguments.optInt("limit", 30),
+                TxbMusicSource.normalize(arguments.optString("src")),
+            ),
+        )
 
         "self.xiaoyu.play_collection" -> {
 
             val query = arguments.optString("query")
 
-            playResolve(mediaResolver.resolveCollection(query, arguments.optInt("limit", 30)))
+            playResolve(
+                mediaResolver.resolveCollection(
+                    query,
+                    arguments.optInt("limit", 30),
+                    TxbMusicSource.normalize(arguments.optString("src")),
+                ),
+            )
 
         }
 
@@ -143,6 +162,16 @@ class MediaCommandHandler(
         "self.xiaoyu.previous" -> routePlaybackControl("previous", "music.previous")
 
         "self.xiaoyu.now_playing" -> nowPlaying()
+
+        "self.xiaoyu.volume_up" -> volumeUp(arguments)
+
+        "self.xiaoyu.volume_down" -> volumeDown(arguments)
+
+        "self.xiaoyu.volume_set" -> volumeSet(arguments)
+
+        "self.xiaoyu.volume_mute" -> volumeMute(arguments)
+
+        "self.xiaoyu.volume_get" -> volumeGet()
 
         "self.xiaoyu.link_dispatch" -> {
 
@@ -216,7 +245,15 @@ class MediaCommandHandler(
 
         val keyword = arguments.optString("keyword").ifBlank { arguments.optString("title") }
 
-        return playResolve(mediaResolver.resolveTrack(keyword))
+        if (keyword.isBlank()) return fail("invalid_args", "缺少 keyword")
+
+        return playResolve(
+            mediaResolver.resolveTrack(
+                keyword,
+                arguments.optInt("limit", 30),
+                TxbMusicSource.normalize(arguments.optString("src")),
+            ),
+        )
 
     }
 
@@ -379,6 +416,72 @@ class MediaCommandHandler(
         return ok("正在播放 ${track.title} - ${track.artist}", track)
 
     }
+
+
+
+    private fun volumeUp(arguments: JSONObject): JSONObject {
+
+        val step = arguments.optInt("step", 10).coerceIn(1, 100)
+
+        val state = volumeController.adjustPercent(step)
+
+        return ok(volumeMessage(state))
+
+    }
+
+
+
+    private fun volumeDown(arguments: JSONObject): JSONObject {
+
+        val step = arguments.optInt("step", 10).coerceIn(1, 100)
+
+        val state = volumeController.adjustPercent(-step)
+
+        return ok(volumeMessage(state))
+
+    }
+
+
+
+    private fun volumeSet(arguments: JSONObject): JSONObject {
+
+        if (!arguments.has("level")) return fail("invalid_args", "缺少 level")
+
+        val level = arguments.optInt("level").coerceIn(0, 100)
+
+        val state = volumeController.setPercent(level)
+
+        return ok(volumeMessage(state))
+
+    }
+
+
+
+    private fun volumeMute(arguments: JSONObject): JSONObject {
+
+        val mute = if (arguments.has("mute")) arguments.optBoolean("mute") else true
+
+        val state = volumeController.setMuted(mute)
+
+        return ok(if (state.muted) "已静音" else volumeMessage(state))
+
+    }
+
+
+
+    private fun volumeGet(): JSONObject {
+
+        val state = volumeController.currentState()
+
+        return ok(if (state.muted) "当前已静音" else "当前音量 ${state.percent}%")
+
+    }
+
+
+
+    private fun volumeMessage(state: VolumeState): String =
+
+        "音量已调至 ${state.percent}%"
 
 
 

@@ -65,10 +65,44 @@ object WakeWords {
 
     fun isEcho(text: String): Boolean {
         val normalized = text.trim().trimEnd('?', '？', '。', '.', ' ', '\uFFFD')
+            .replace("，", "")
+            .replace(",", "")
+        for (phrase in LOCAL_WAKE_ACK_ECHO) {
+            val p = phrase.replace("，", "")
+            if (normalized == p || (normalized.contains(p) && normalized.length <= p.length + 4)) {
+                return true
+            }
+        }
         for (word in ALL) {
-            if (normalized == word) return true
-            if (normalized.startsWith(word) && normalized.length <= word.length + 2) return true
+            if (normalized == word.replace("，", "")) return true
+            if (normalized.startsWith(word.replace("，", "")) &&
+                normalized.length <= word.length + 2
+            ) {
+                return true
+            }
+            if (isHomophoneWakeEcho(normalized, word)) return true
         }
         return false
     }
+
+    /** ASR 常把唤醒词听成同音字，如 小艺小艺 -> 小易小艺 */
+    private fun isHomophoneWakeEcho(stt: String, wake: String): Boolean {
+        if (wake.length != 4 || wake[0] != '小' || wake[2] != '小' || wake[1] != wake[3]) {
+            return false
+        }
+        if (stt.length !in 4..5) return false
+        val core = stt.trimEnd('。', '.')
+        if (core.length != 4) return false
+        if (core[0] != '小' || core[2] != '小') return false
+        val yiLike = "艺易意忆译毅伊倚"
+        return core[1] in yiLike && core[3] in yiLike && wake[1] == '艺'
+    }
+
+    private val LOCAL_WAKE_ACK_ECHO = listOf(
+        "在呢",
+        "我在",
+        "你说",
+        "我在，你说",
+        "我在你说",
+    )
 }

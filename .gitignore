@@ -40,3 +40,5 @@ output-metadata.json
 
 # Kotlin
 .kotlin/
+
+scripts/

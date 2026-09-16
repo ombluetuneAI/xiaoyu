@@ -95,7 +95,7 @@ class MediaPlayerFacade(
         }
     }
 
-    /** 解析 URL 并开始播放；返回是否进入 READY 状态 */
+    /** 解析 URL 并开始播放；返回是否进入 READY 且开始播放 */
     suspend fun playTrackAwait(track: Track, mode: PlaybackMode, stopPrevious: Boolean = true): Boolean {
         val resolved = resolveUrl(track) ?: run {
             Log.w(TAG, "playTrack failed: no url for ${track.title}")
@@ -104,12 +104,16 @@ class MediaPlayerFacade(
         return withContext(Dispatchers.Main) {
             suspendCancellableCoroutine { cont ->
                 val listener = object : Player.Listener {
-                    override fun onPlaybackStateChanged(playbackState: Int) {
-                        if (playbackState == Player.STATE_READY && player.playWhenReady) {
+                    fun tryComplete() {
+                        if (player.playbackState == Player.STATE_READY && player.playWhenReady) {
                             player.removeListener(this)
                             if (cont.isActive) cont.resume(true)
                         }
                     }
+
+                    override fun onPlaybackStateChanged(playbackState: Int) = tryComplete()
+
+                    override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) = tryComplete()
 
                     override fun onPlayerError(error: PlaybackException) {
                         player.removeListener(this)
@@ -119,6 +123,7 @@ class MediaPlayerFacade(
                 player.addListener(listener)
                 cont.invokeOnCancellation { player.removeListener(listener) }
                 playTrackInternal(resolved, mode, stopPrevious)
+                listener.tryComplete()
             }
         }
     }
@@ -147,7 +152,7 @@ class MediaPlayerFacade(
         player.setMediaItem(MediaItem.fromUri(normalizeStreamUrl(track.url)))
         player.prepare()
         player.volume = 1f
-        player.play()
+        player.playWhenReady = true
         onTrackChanged?.invoke(track)
         Log.i(TAG, "playing ${track.title} mode=$mode")
     }

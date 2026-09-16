@@ -32,6 +32,15 @@ class MusicQueueManager {
 
     fun currentTrack(): Track? = _tracks.value.getOrNull(_currentIndex.value)
 
+    /** 从当前位置向后看第 [offset] 首（1=下一首），不修改 index。 */
+    fun peekAtOffset(offset: Int): Track? {
+        if (offset <= 0) return currentTrack()
+        val list = _tracks.value
+        if (list.isEmpty() || _mode.value != PlaybackMode.QUEUE_LOOP) return null
+        val index = (_currentIndex.value + offset) % list.size
+        return list[index]
+    }
+
     fun jumpTo(index: Int) {
         if (index in _tracks.value.indices) {
             _currentIndex.value = index

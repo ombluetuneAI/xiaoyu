@@ -17,11 +17,11 @@ class MusicApiClient(
         .build(),
 ) {
     /** 只拉歌单元数据；播放链接由 [MediaResolver] 按需 lazy resolve，避免 TXB 一次解析 limit 条。 */
-    fun fetchPlaylists(limit: Int = 30): ResolveResult = try {
-        val url = "${baseUrlProvider().trimEnd('/')}/music/v1/playlists?limit=$limit"
+    fun fetchPlaylists(limit: Int = 30, src: String = TxbMusicSource.DEFAULT): ResolveResult = try {
+        val source = TxbMusicSource.normalize(src)
+        val url = "${baseUrlProvider().trimEnd('/')}/music/v1/playlists?limit=$limit&src=${encode(source)}"
         val json = getJson(url)
         val tracks = TxbResponseParser.parseTracks(TxbResponseParser.extractTrackArray(json), allowMissingUrl = true)
-            .sortedByDescending { it.url.isNotBlank() }
         if (tracks.isEmpty()) {
             ResolveResult.failure("no_match", "播放列表为空")
         } else {
@@ -31,33 +31,30 @@ class MusicApiClient(
         ResolveResult.failure("txb_unreachable", "暂时无法连接音乐服务")
     }
 
-    fun search(query: String, limit: Int = 30): ResolveResult {
+    /** GET /music/v1/search — 返回列表按 API 顺序连播；[src] 默认 kw */
+    fun search(
+        query: String,
+        limit: Int = 30,
+        src: String = TxbMusicSource.DEFAULT,
+    ): ResolveResult {
         if (query.isBlank()) return ResolveResult.failure("invalid_args", "缺少 query")
-        return searchWithParam(query, limit, "keyword")
+        return searchRequest(query, limit, TxbMusicSource.normalize(src))
             ?: ResolveResult.failure("no_match", "暂时找不到这首歌")
     }
 
-    private fun searchWithParam(query: String, limit: Int, param: String): ResolveResult? = try {
-        val url = "${baseUrlProvider().trimEnd('/')}/music/v1/search?$param=${encode(query)}&limit=$limit"
+    private fun searchRequest(query: String, limit: Int, src: String): ResolveResult? = try {
+        val url = buildSearchUrl(query, limit, src)
         val json = getJson(url)
         val tracks = TxbResponseParser.parseTracks(TxbResponseParser.extractTrackArray(json), allowMissingUrl = true)
-            .sortedByDescending { it.url.isNotBlank() }
         if (tracks.isEmpty()) null
         else ResolveResult.success(tracks, PlaybackMode.QUEUE_LOOP, "$query · ${tracks.size} 首")
     } catch (e: Exception) {
-        if (param == "q") null else ResolveResult.failure("txb_unreachable", "暂时无法连接音乐服务")
+        ResolveResult.failure("txb_unreachable", "暂时无法连接音乐服务")
     }
 
-    fun playTrack(keyword: String): ResolveResult {
-        return try {
-            val url = TxbPlayQuery.build(
-                baseUrl = baseUrlProvider().trimEnd('/'),
-                keywordOverride = keyword,
-            )
-            requestPlay(url)
-        } catch (e: Exception) {
-            ResolveResult.failure("txb_unreachable", "暂时无法连接音乐服务")
-        }
+    internal fun buildSearchUrl(query: String, limit: Int, src: String): String {
+        val base = baseUrlProvider().trimEnd('/')
+        return "$base/music/v1/search?keyword=${encode(query)}&limit=$limit&src=${encode(TxbMusicSource.normalize(src))}"
     }
 
     /** lazy resolve：统一 play 参数 keyword={name-artists} + 可选 id/mid/src + source=auto */
@@ -68,16 +65,6 @@ class MusicApiClient(
             requestPlayTrack(url)
         } catch (_: Exception) {
             null
-        }
-    }
-
-    private fun requestPlay(url: String): ResolveResult {
-        val json = getJson(url)
-        val track = parsePlayResponse(json)
-        return if (track == null) {
-            ResolveResult.failure("no_match", "暂时找不到这首歌")
-        } else {
-            ResolveResult.success(listOf(track), PlaybackMode.SINGLE, track.title)
         }
     }
 

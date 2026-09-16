@@ -12,6 +12,7 @@ import com.xiaoyu.app.R
 import com.xiaoyu.app.ui.activation.ActivationActivity
 import com.xiaoyu.app.ui.media.PlayerActivity
 import com.xiaoyu.core.voice.ota.XiaozhiBindState
+import com.xiaoyu.service.UserNotice
 import com.xiaoyu.service.XiaoyuAppGraph
 import com.xiaoyu.service.XiaoyuAssistantService
 import kotlinx.coroutines.Dispatchers
@@ -121,7 +122,7 @@ class SettingsActivity : AppCompatActivity() {
         lifecycleScope.launch {
             val state = withContext(Dispatchers.IO) { graph.bindManager.refresh() }
             if (state == XiaozhiBindState.UNKNOWN) {
-                graph.ttsHelper.speak("无法连接小智服务")
+                UserNotice.toast(this@SettingsActivity, "无法连接小智服务")
             }
         }
     }

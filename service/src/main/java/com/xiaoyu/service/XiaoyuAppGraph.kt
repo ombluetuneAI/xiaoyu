@@ -7,10 +7,12 @@ import com.xiaoyu.core.mcp.DeviceMcpServer
 import com.xiaoyu.core.media.AudioFocusCoordinator
 import com.xiaoyu.core.media.MediaResolver
 import com.xiaoyu.core.media.PlaybackMode
+import com.xiaoyu.core.media.VolumeController
 import com.xiaoyu.core.media.api.MusicApiClient
 import com.xiaoyu.core.media.api.RadioApiClient
 import com.xiaoyu.core.media.player.MediaPlayerFacade
 import com.xiaoyu.core.media.queue.MusicQueueManager
+import com.xiaoyu.core.media.queue.QueuePlaybackAdvancer
 import com.xiaoyu.core.registry.AppAdapterRegistry
 import com.xiaoyu.core.router.ActiveMediaSource
 import com.xiaoyu.core.router.BroadcastLinkDispatcherAdapter
@@ -74,7 +76,7 @@ class XiaoyuAppGraph private constructor(context: Context) {
     lateinit var deviceMcpServer: DeviceMcpServer
     lateinit var sessionManager: VoiceSessionManager
     lateinit var mediaSessionManager: MediaSessionManager
-    lateinit var ttsHelper: TtsHelper
+    lateinit var wakeAckPlayer: WakeAckPlayer
 
     var onSpeak: ((String) -> Unit)? = null
 
@@ -96,22 +98,16 @@ class XiaoyuAppGraph private constructor(context: Context) {
             }
         }
         mediaSessionManager = MediaSessionManager(ctx, playerFacade, queueManager)
+        val queueAdvancer = QueuePlaybackAdvancer(
+            scope = mediaScope,
+            queueManager = queueManager,
+            mediaResolver = mediaResolver,
+            playerFacade = playerFacade,
+            onAdvanced = { mediaSessionManager.updateNotification() },
+        )
         playerFacade.onEnded = {
             when (queueManager.mode.value) {
-                PlaybackMode.QUEUE_LOOP -> {
-                    mediaScope.launch {
-                        var skipped = 0
-                        while (skipped < 5) {
-                            val next = queueManager.next() ?: return@launch
-                            val resolved = mediaResolver.resolveTrackUrl(next) ?: next
-                            if (resolved.url.isNotBlank()) {
-                                playerFacade.playTrack(resolved, queueManager.mode.value)
-                                return@launch
-                            }
-                            skipped++
-                        }
-                    }
-                }
+                PlaybackMode.QUEUE_LOOP -> queueAdvancer.onTrackEnded()
                 PlaybackMode.SINGLE -> {
                     playerFacade.stop()
                     mediaSessionManager.hideNotification()
@@ -126,6 +122,7 @@ class XiaoyuAppGraph private constructor(context: Context) {
             activeMediaSource = activeMediaSource,
             linkDispatcher = linkDispatcher,
             registry = registry,
+            volumeController = VolumeController(ctx),
             onPlaybackError = { message -> onSpeak?.invoke(message) },
             onPlaybackStarted = { mediaSessionManager.updateNotification() },
         )
@@ -135,7 +132,7 @@ class XiaoyuAppGraph private constructor(context: Context) {
         voiceClient.onTtsStart = { audioFocus.duckForVoiceTts() }
         voiceClient.onTtsComplete = { audioFocus.unduckAfterVoiceTts() }
 
-        ttsHelper = TtsHelper(ctx)
+        wakeAckPlayer = WakeAckPlayer(ctx)
 
         sessionManager = VoiceSessionManager(
             continuousDialog = { preferences.continuousDialog },
@@ -153,12 +150,20 @@ class XiaoyuAppGraph private constructor(context: Context) {
             onResumeWake = { wakeEngine.resume() },
             onEndSession = { reason ->
                 when (reason) {
-                    SessionEndReason.IDLE_TIMEOUT -> voiceClient.endSessionQuietly("user_idle")
-                    SessionEndReason.MANUAL -> voiceClient.endSessionQuietly("user_cancel")
-                    SessionEndReason.DISCONNECT -> voiceClient.endSessionQuietly("disconnect")
-                    SessionEndReason.GOODBYE,
-                    SessionEndReason.NORMAL,
-                    -> voiceClient.stopListening()
+                    SessionEndReason.IDLE_TIMEOUT ->
+                        voiceClient.endSessionAndDisconnect("user_idle")
+                    SessionEndReason.MANUAL ->
+                        voiceClient.endSessionAndDisconnect("user_cancel")
+                    SessionEndReason.DISCONNECT ->
+                        voiceClient.endSessionAndDisconnect("disconnect")
+                    SessionEndReason.GOODBYE -> {
+                        voiceClient.stopListening()
+                        voiceClient.disconnect(manual = true)
+                    }
+                    SessionEndReason.NORMAL -> {
+                        voiceClient.stopListening()
+                        voiceClient.disconnect(manual = true)
+                    }
                 }
             },
             onWakeBlocked = {

@@ -54,6 +54,8 @@
                 <action android:name="com.xiaoyu.debug.WAKE" />
                 <action android:name="com.xiaoyu.debug.END_SESSION" />
                 <action android:name="com.xiaoyu.debug.CONNECT_VOICE" />
+                <action android:name="com.xiaoyu.debug.SIMULATE_KWS" />
+                <action android:name="com.xiaoyu.debug.PLAY_WAKE_TTS" />
             </intent-filter>
         </receiver>
 

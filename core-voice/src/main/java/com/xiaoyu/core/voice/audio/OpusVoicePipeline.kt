@@ -2,6 +2,7 @@ package com.xiaoyu.core.voice.audio
 
 import android.annotation.SuppressLint
 import android.media.AudioAttributes
+import android.util.Log
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.AudioTrack
@@ -72,6 +73,7 @@ class OpusVoicePipeline {
                 AudioFormat.ENCODING_PCM_16BIT,
             )
             if (bufferSize <= 0) {
+                Log.w(TAG, "startCapture failed: invalid bufferSize=$bufferSize")
                 capturing.set(false)
                 return@launch
             }
@@ -83,6 +85,7 @@ class OpusVoicePipeline {
                 bufferSize * 2,
             )
             if (recorder.state != AudioRecord.STATE_INITIALIZED) {
+                Log.w(TAG, "startCapture failed: AudioRecord not initialized")
                 recorder.release()
                 capturing.set(false)
                 return@launch
@@ -193,5 +196,9 @@ class OpusVoicePipeline {
     fun shutdown() {
         detach()
         scope.cancel()
+    }
+
+    companion object {
+        private const val TAG = "OpusVoicePipeline"
     }
 }

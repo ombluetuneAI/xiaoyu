@@ -25,6 +25,16 @@ class DebugVoiceReceiver : BroadcastReceiver() {
                 Intent(context, XiaoyuAssistantService::class.java)
                     .setAction(XiaoyuAssistantService.ACTION_CONNECT_VOICE),
             )
+            ACTION_SIMULATE_KWS -> ContextCompat.startForegroundService(
+                context,
+                Intent(context, XiaoyuAssistantService::class.java)
+                    .setAction(XiaoyuAssistantService.ACTION_DEBUG_SIMULATE_KWS),
+            )
+            ACTION_PLAY_WAKE_TTS -> ContextCompat.startForegroundService(
+                context,
+                Intent(context, XiaoyuAssistantService::class.java)
+                    .setAction(XiaoyuAssistantService.ACTION_DEBUG_PLAY_WAKE_TTS),
+            )
         }
     }
 
@@ -32,5 +42,7 @@ class DebugVoiceReceiver : BroadcastReceiver() {
         const val ACTION_WAKE = "com.xiaoyu.debug.WAKE"
         const val ACTION_END = "com.xiaoyu.debug.END_SESSION"
         const val ACTION_CONNECT = "com.xiaoyu.debug.CONNECT_VOICE"
+        const val ACTION_SIMULATE_KWS = "com.xiaoyu.debug.SIMULATE_KWS"
+        const val ACTION_PLAY_WAKE_TTS = "com.xiaoyu.debug.PLAY_WAKE_TTS"
     }
 }

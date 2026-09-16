@@ -67,6 +67,11 @@ class VoiceSessionManager(
         }
         onPauseWake()
         transitionTo(VoiceSessionState.WAKE_DETECTED)
+    }
+
+    /** 唤醒应答 TTS/WAV 与 WS 就绪后开麦；不必等本地应答 WAV 播完 */
+    fun startListeningAfterWakeAck(wakeWord: String = WakeWords.DEFAULT) {
+        if (state != VoiceSessionState.WAKE_DETECTED) return
         onStartListening(ListenTrigger.WAKE, wakeWord)
     }
 

@@ -11,12 +11,16 @@ import androidx.lifecycle.lifecycleScope
 import com.xiaoyu.app.R
 import com.xiaoyu.app.ui.media.PlayerActivity
 import com.xiaoyu.app.ui.settings.SettingsActivity
+import com.xiaoyu.core.media.Track
 import com.xiaoyu.core.session.VoiceSessionState
+import com.xiaoyu.core.voice.client.VoiceEvent
 import com.xiaoyu.core.voice.ota.XiaozhiBindState
 import com.xiaoyu.service.XiaoyuAppGraph
 import com.xiaoyu.service.XiaoyuAssistantService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -29,8 +33,7 @@ class VoiceHomeActivity : AppCompatActivity() {
 
         ContextCompat.startForegroundService(
             this,
-            Intent(this, XiaoyuAssistantService::class.java)
-                .setAction(XiaoyuAssistantService.ACTION_CONNECT_VOICE),
+            Intent(this, XiaoyuAssistantService::class.java),
         )
 
         val bindStatus = findViewById<TextView>(R.id.bindStatus)
@@ -39,23 +42,38 @@ class VoiceHomeActivity : AppCompatActivity() {
         val nowPlayingStatus = findViewById<TextView>(R.id.nowPlayingStatus)
         val statusSubtitle = findViewById<TextView>(R.id.statusSubtitle)
 
+        val wsConnected = flow {
+            emit(graph.voiceClient.isConnected())
+            graph.voiceClient.events.collect { event ->
+                when (event) {
+                    is VoiceEvent.Connected -> emit(true)
+                    is VoiceEvent.Disconnected -> emit(false)
+                    else -> Unit
+                }
+            }
+        }.distinctUntilChanged()
+
         lifecycleScope.launch {
             combine(
                 graph.bindManager.state,
                 graph.sessionState,
                 graph.queueManager.nowPlaying,
-            ) { bind, session, track ->
-                Triple(bind, session, track)
-            }.collect { (bind, session, track) ->
+                wsConnected,
+            ) { bind, session, track, voiceWs ->
+                VoiceHomeUiState(bind, session, track, voiceWs)
+            }.collect { ui ->
+                val bind = ui.bind
+                val session = ui.session
+                val track = ui.track
                 bindStatus.text = when (bind) {
                     XiaozhiBindState.BOUND -> "小智绑定 · 已连接"
                     XiaozhiBindState.NEEDS_ACTIVATION -> "小智绑定 · 待激活"
                     else -> "小智绑定 · 未知"
                 }
-                voiceStatus.text = if (graph.voiceClient.isConnected()) {
-                    "语音 WS · 已连接"
-                } else {
-                    "语音 WS · 重连中"
+                voiceStatus.text = when {
+                    ui.voiceWsConnected -> "语音 WS · 已连接"
+                    session == VoiceSessionState.IDLE -> "语音 WS · 待唤醒（正常未连）"
+                    else -> "语音 WS · 连接中…"
                 }
                 sessionStatus.text = "会话 · ${sessionLabel(session)}"
                 statusSubtitle.text = when (session) {
@@ -126,6 +144,13 @@ class VoiceHomeActivity : AppCompatActivity() {
             findViewById<TextView>(R.id.btnPlay).performClick()
         }
     }
+
+    private data class VoiceHomeUiState(
+        val bind: XiaozhiBindState,
+        val session: VoiceSessionState,
+        val track: Track?,
+        val voiceWsConnected: Boolean,
+    )
 
     companion object {
         const val EXTRA_AUTO_PLAY = "auto_play"

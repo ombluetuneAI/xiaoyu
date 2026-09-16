@@ -20,23 +20,27 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 class XiaoyuAssistantService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private lateinit var graph: XiaoyuAppGraph
     private var voiceWakeLock: PowerManager.WakeLock? = null
+    private val wakeSessionMutex = Mutex()
 
     override fun onCreate() {
         super.onCreate()
         graph = XiaoyuAppGraph.get(this)
-        graph.onSpeak = { message -> graph.ttsHelper.speak(message) }
-        graph.ttsHelper.onSpeakingChanged = { speaking ->
-            if (speaking) {
-                graph.audioFocus.requestForTts { graph.ttsHelper.speak("") }
-            } else {
-                graph.audioFocus.abandonTtsFocus()
-            }
+        graph.onSpeak = { message -> UserNotice.toast(this, message) }
+        graph.wakeAckPlayer.onBeforePlay = {
+            graph.audioFocus.requestForTts { graph.wakeAckPlayer.stop() }
+        }
+        graph.wakeAckPlayer.onPlayingChanged = { speaking ->
+            if (!speaking) graph.audioFocus.abandonTtsFocus()
         }
         XiaoyuNotifications.ensureChannels(this)
         startForeground(NOTIFICATION_ID, buildNotification("小鱼同学待命中", "说「小鱼同学」唤醒"))
@@ -55,7 +59,6 @@ class XiaoyuAssistantService : Service() {
         observeVoice()
         observeWake()
         scope.launch { pollIdleTimeout() }
-        scope.launch { reconnectVoiceLoop() }
         scope.launch { pollActiveMediaIdle() }
     }
 
@@ -69,16 +72,8 @@ class XiaoyuAssistantService : Service() {
         when (intent?.action) {
             ACTION_WAKE_FROM_NOTIFICATION -> {
                 Log.i(TAG, "notification wake tapped")
-                if (graph.bindManager.isVoiceAllowed()) {
-                    scope.launch {
-                        if (ensureVoiceConnectedAwait()) {
-                            graph.sessionManager.onWakeWordDetected(true)
-                        } else {
-                            graph.onSpeak?.invoke("语音服务未连接，请稍后再试")
-                        }
-                    }
-                } else {
-                    graph.sessionManager.onWakeWordDetected(false)
+                scope.launch {
+                    runWakeSession(trigger = "notification")
                 }
             }
             ACTION_END_SESSION -> graph.sessionManager.endSession()
@@ -93,6 +88,12 @@ class XiaoyuAssistantService : Service() {
             ACTION_CONNECT_VOICE -> {
                 Log.i(TAG, "ACTION_CONNECT_VOICE: ensureVoiceConnected")
                 ensureVoiceConnected()
+            }
+            ACTION_DEBUG_SIMULATE_KWS -> scope.launch {
+                runWakeSession(trigger = "debug_kws", wakeWord = "小鱼小鱼")
+            }
+            ACTION_DEBUG_PLAY_WAKE_TTS -> scope.launch {
+                graph.wakeAckPlayer.playRandom(onComplete = {})
             }
             ACTION_TEST_PLAY -> scope.launch(Dispatchers.IO) {
                 val result = graph.mediaResolver.resolveGeneral(limit = 10)
@@ -133,26 +134,48 @@ class XiaoyuAssistantService : Service() {
         graph.voiceClient.disconnect()
         graph.wakeEngine.stop()
         graph.mediaSessionManager.release()
-        graph.ttsHelper.shutdown()
+        graph.wakeAckPlayer.stop()
         super.onDestroy()
     }
 
     private fun observeWake() {
         scope.launch {
             graph.wakeEngine.wakeEvents.collectLatest { wakeWord ->
-                if (!graph.bindManager.isVoiceAllowed()) {
-                    val code = graph.bindManager.activationCode.value ?: "—"
-                    updateNotification("待绑定小智", "激活码 $code")
-                    graph.sessionManager.onWakeWordDetected(false)
-                    return@collectLatest
+                runWakeSession(trigger = "kws", wakeWord = wakeWord)
+            }
+        }
+    }
+
+    private suspend fun runWakeSession(trigger: String, wakeWord: String = com.xiaoyu.core.wake.WakeWords.DEFAULT) {
+        wakeSessionMutex.withLock {
+            if (!graph.bindManager.isVoiceAllowed()) {
+                val code = graph.bindManager.activationCode.value ?: "—"
+                updateNotification("待绑定小智", "激活码 $code")
+                graph.sessionManager.onWakeWordDetected(false)
+                return
+            }
+            val playLocalWakeAck = trigger == "kws" || trigger == "debug_kws"
+            Log.i(TAG, "wake word detected: $wakeWord trigger=$trigger")
+            graph.sessionManager.onWakeWordDetected(true, wakeWord)
+
+            coroutineScope {
+                val voiceReady = async(Dispatchers.IO) { prepareVoiceForWake() }
+                if (playLocalWakeAck) {
+                    launch(Dispatchers.Main) {
+                        graph.wakeAckPlayer.playRandom {
+                            graph.audioFocus.abandonTtsFocus()
+                        }
+                    }
                 }
-                Log.i(TAG, "wake word detected: $wakeWord")
-                if (!ensureVoiceConnectedAwait()) {
-                    Log.w(TAG, "wake ignored: voice WS not connected in time")
+                if (!voiceReady.await()) {
+                    Log.w(TAG, "wake aborted: voice not ready")
+                    graph.wakeAckPlayer.stop()
+                    graph.sessionManager.endSession()
                     graph.onSpeak?.invoke("语音服务未连接，请稍后再试")
-                    return@collectLatest
+                    return@coroutineScope
                 }
-                graph.sessionManager.onWakeWordDetected(true, wakeWord)
+                Log.i(TAG, "voice ready -> startListening (wake ack may still be playing)")
+                graph.sessionManager.startListeningAfterWakeAck(wakeWord)
             }
         }
     }
@@ -162,11 +185,11 @@ class XiaoyuAssistantService : Service() {
             graph.voiceClient.events.collectLatest { event ->
                 when (event) {
                     is VoiceEvent.Connected -> {
-                        updateNotification("小鱼同学待命中", "语音已连接")
-                        Log.i(TAG, "voice WS connected")
+                        updateNotification("小鱼同学", "语音会话已连接")
+                        Log.i(TAG, "voice WS connected (session)")
                     }
                     is VoiceEvent.Disconnected -> {
-                        updateNotification("语音离线 · 重连中", event.reason)
+                        updateNotification("小鱼同学待命中", "说唤醒词开始对话")
                         if (graph.sessionState.value != VoiceSessionState.IDLE) {
                             Log.i(TAG, "voice disconnected during session -> end quietly")
                             graph.sessionManager.endSession(com.xiaoyu.core.session.SessionEndReason.DISCONNECT)
@@ -243,15 +266,6 @@ class XiaoyuAssistantService : Service() {
         }
     }
 
-    private suspend fun reconnectVoiceLoop() {
-        while (scope.isActive) {
-            delay(10000)
-            if (graph.bindManager.state.value == XiaozhiBindState.BOUND && !graph.voiceClient.isConnected()) {
-                ensureVoiceConnected()
-            }
-        }
-    }
-
     private fun ensureVoiceConnected() {
         if (graph.voiceClient.isConnected()) return
         val bind = graph.bindManager.websocketConfig() ?: return
@@ -259,6 +273,15 @@ class XiaoyuAssistantService : Service() {
         val ws = bind.websocket ?: return
         val version = bind.websocket?.version?.toIntOrNull() ?: 1
         graph.voiceClient.connect(ws.url, ws.token, graph.deviceMac, graph.preferences.clientId, version)
+    }
+
+    private suspend fun prepareVoiceForWake(): Boolean {
+        graph.voiceClient.disconnect(manual = true)
+        if (!ensureVoiceConnectedAwait(timeoutMs = 12_000L)) {
+            Log.w(TAG, "prepareVoiceForWake: WS connect timeout")
+            return false
+        }
+        return graph.voiceClient.awaitServerHello(timeoutMs = 12_000L)
     }
 
     private suspend fun ensureVoiceConnectedAwait(timeoutMs: Long = 8000L): Boolean {
@@ -322,5 +345,7 @@ class XiaoyuAssistantService : Service() {
         const val ACTION_REFRESH_BIND = "com.xiaoyu.action.REFRESH_BIND"
         const val ACTION_CONNECT_VOICE = "com.xiaoyu.action.CONNECT_VOICE"
         const val ACTION_TEST_PLAY = "com.xiaoyu.action.TEST_PLAY"
+        const val ACTION_DEBUG_SIMULATE_KWS = "com.xiaoyu.action.DEBUG_SIMULATE_KWS"
+        const val ACTION_DEBUG_PLAY_WAKE_TTS = "com.xiaoyu.action.DEBUG_PLAY_WAKE_TTS"
     }
 }

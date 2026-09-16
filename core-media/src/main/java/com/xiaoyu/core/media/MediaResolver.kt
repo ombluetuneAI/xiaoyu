@@ -3,22 +3,34 @@ package com.xiaoyu.core.media
 import android.util.Log
 import com.xiaoyu.core.media.api.MusicApiClient
 import com.xiaoyu.core.media.api.RadioApiClient
+import com.xiaoyu.core.media.api.TxbMusicSource
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class MediaResolver(
     private val musicApi: MusicApiClient,
     private val radioApi: RadioApiClient,
 ) {
-    suspend fun resolveGeneral(limit: Int = 30): ResolveResult =
-        buildPlayQueue(musicApi.fetchPlaylists(limit))
+    suspend fun resolveGeneral(limit: Int = 30, src: String = TxbMusicSource.DEFAULT): ResolveResult =
+        buildPlayQueue(musicApi.fetchPlaylists(limit, src))
 
-    suspend fun resolveCollection(query: String, limit: Int = 30): ResolveResult {
+    suspend fun resolveCollection(
+        query: String,
+        limit: Int = 30,
+        src: String = TxbMusicSource.DEFAULT,
+    ): ResolveResult {
         if (query.isBlank()) return ResolveResult.failure("invalid_args", "缺少 query")
-        return buildPlayQueue(musicApi.search(query, limit))
+        return buildPlayQueue(musicApi.search(query, limit, src), preserveApiOrder = true)
     }
 
-    suspend fun resolveTrack(keyword: String): ResolveResult {
+    /** 指定歌名/关键词：走 search 列表，按返回顺序 QUEUE_LOOP 连播 */
+    suspend fun resolveTrack(
+        keyword: String,
+        limit: Int = 30,
+        src: String = TxbMusicSource.DEFAULT,
+    ): ResolveResult {
         if (keyword.isBlank()) return ResolveResult.failure("invalid_args", "缺少 keyword")
-        return buildPlayQueue(musicApi.playTrack(keyword), singleMode = true)
+        return buildPlayQueue(musicApi.search(keyword, limit, src), preserveApiOrder = true)
     }
 
     suspend fun resolveRadio(name: String?): ResolveResult = radioApi.play(name)
@@ -27,16 +39,26 @@ class MediaResolver(
 
     suspend fun resolveTrackUrl(track: Track): Track? {
         if (track.url.isNotBlank()) return track
-        return musicApi.resolvePlayUrl(track)
+        return withContext(Dispatchers.IO) {
+            musicApi.resolvePlayUrl(track)
+        }
     }
 
     /**
      * 只 eager resolve 第一首可播曲目，其余进队列 lazy resolve（切歌/onEnded 再解析）。
      * 最多尝试 [MAX_FIRST_RESOLVE_ATTEMPTS] 首，避免列表前 N 首不可播时连打 N 次 TXB。
      */
-    private suspend fun buildPlayQueue(result: ResolveResult, singleMode: Boolean = false): ResolveResult {
+    private suspend fun buildPlayQueue(
+        result: ResolveResult,
+        singleMode: Boolean = false,
+        preserveApiOrder: Boolean = false,
+    ): ResolveResult {
         if (!result.ok) return result
-        val sorted = result.tracks.sortedWith(compareBy({ !preferUrl(it.url) }, { it.url.isBlank() }))
+        val sorted = if (preserveApiOrder) {
+            result.tracks
+        } else {
+            result.tracks.sortedWith(compareBy({ !preferUrl(it.url) }, { it.url.isBlank() }))
+        }
         if (sorted.isEmpty()) {
             return ResolveResult.failure("no_match", result.message ?: "没有可播放曲目")
         }
