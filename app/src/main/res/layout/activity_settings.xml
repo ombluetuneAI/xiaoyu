@@ -23,6 +23,8 @@
                 android:text="连续对话" android:textColor="@color/xiaoyu_text"/>
             <Switch android:id="@+id/switchContinuous" android:layout_width="wrap_content" android:layout_height="wrap_content"/>
         </LinearLayout>
+        <TextView android:id="@+id/rowKws" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:padding="12dp" android:text="@string/kws_settings_row" android:textColor="@color/xiaoyu_text"/>
         <TextView android:id="@+id/rowBackground" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:padding="12dp" android:text="后台能力检测" android:textColor="@color/xiaoyu_text"/>
         <TextView android:id="@+id/rowTxb" android:layout_width="match_parent" android:layout_height="wrap_content"

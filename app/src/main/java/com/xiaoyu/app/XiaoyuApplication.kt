@@ -6,6 +6,7 @@ import com.xiaoyu.service.XiaoyuAppGraph
 class XiaoyuApplication : Application() {
     override fun onCreate() {
         super.onCreate()
-        XiaoyuAppGraph.init(this)
+        val graph = XiaoyuAppGraph.init(this)
+        graph.preferences.migrateKwsSensitivityIfNeeded()
     }
 }

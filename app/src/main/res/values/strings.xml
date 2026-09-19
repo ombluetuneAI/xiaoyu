@@ -18,4 +18,16 @@
     <string name="player_play">播放</string>
     <string name="player_pause">暂停</string>
     <string name="player_next">下一首</string>
+    <string name="kws_settings_title">唤醒灵敏度</string>
+    <string name="kws_settings_row">唤醒词灵敏度（KWS）</string>
+    <string name="kws_settings_hint">播歌或环境吵时，可提高灵敏度；过高易误唤醒。保存后立即重载离线唤醒引擎。</string>
+    <string name="kws_sensitivity_label">唤醒灵敏度：%1$d（触发阈值 %2$.2f，越小越灵敏）</string>
+    <string name="kws_score_label">关键词增强：%1$.1f（越大越易命中）</string>
+    <string name="kws_summary">当前 Sherpa 参数：score=%1$.1f，threshold=%2$.2f</string>
+    <string name="kws_preset_noisy">一键：播歌 / 嘈杂环境</string>
+    <string name="kws_preset_default">恢复默认</string>
+    <string name="kws_save_apply">保存并应用</string>
+    <string name="kws_saved_toast">唤醒参数已更新</string>
+    <string name="voice_ws_connected">语音 WS · 已连接</string>
+    <string name="voice_ws_disconnected">语音 WS · 未连接</string>
 </resources>

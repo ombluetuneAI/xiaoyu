@@ -35,8 +35,10 @@ object WakeWords {
         return try {
             val text = context.assets.open(assetPath).bufferedReader(Charsets.UTF_8).use { it.readText() }
             val words = parseFromKeywordsFile(text)
-            if (words.isNotEmpty()) configure(words)
-            words.isNotEmpty()
+            OfflineKwsCommands.configureFromKeywords(words)
+            val wakeOnly = words.filter { !OfflineKwsCommands.isCommandPhrase(it) }
+            if (wakeOnly.isNotEmpty()) configure(wakeOnly)
+            wakeOnly.isNotEmpty()
         } catch (_: Exception) {
             false
         }

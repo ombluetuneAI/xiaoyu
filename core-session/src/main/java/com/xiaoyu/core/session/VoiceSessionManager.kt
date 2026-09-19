@@ -1,5 +1,6 @@
 package com.xiaoyu.core.session
 
+import android.util.Log
 import com.xiaoyu.core.wake.WakeWords
 
 enum class VoiceSessionState {
@@ -71,7 +72,14 @@ class VoiceSessionManager(
 
     /** 唤醒应答 TTS/WAV 与 WS 就绪后开麦；不必等本地应答 WAV 播完 */
     fun startListeningAfterWakeAck(wakeWord: String = WakeWords.DEFAULT) {
-        if (state != VoiceSessionState.WAKE_DETECTED) return
+        if (state == VoiceSessionState.IDLE) {
+            Log.w(TAG, "startListeningAfterWakeAck: recover IDLE -> WAKE_DETECTED")
+            transitionTo(VoiceSessionState.WAKE_DETECTED)
+        }
+        if (state != VoiceSessionState.WAKE_DETECTED) {
+            Log.w(TAG, "startListeningAfterWakeAck skipped, state=$state")
+            return
+        }
         onStartListening(ListenTrigger.WAKE, wakeWord)
     }
 
@@ -132,5 +140,9 @@ class VoiceSessionManager(
 
     private fun clearIdleTimeout() {
         idleDeadlineMs = 0L
+    }
+
+    companion object {
+        private const val TAG = "VoiceSessionManager"
     }
 }

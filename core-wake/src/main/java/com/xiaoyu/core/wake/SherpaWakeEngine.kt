@@ -29,6 +29,7 @@ import kotlinx.coroutines.launch
  */
 class SherpaWakeEngine(
     private val context: Context? = null,
+    private val tuningProvider: () -> KwsTuning = { KwsTuning.DEFAULT },
 ) : WakeEngine {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val _wakeEvents = MutableSharedFlow<String>(extraBufferCapacity = 8)
@@ -61,6 +62,9 @@ class SherpaWakeEngine(
         paused = false
         consecutiveHighFrames = 0
         lastWakeMs = 0L
+        if (job?.isActive == true && kws == null) {
+            ensureSherpa()
+        }
         Log.d(TAG, "KWS resumed")
     }
 
@@ -69,11 +73,23 @@ class SherpaWakeEngine(
         job = null
         paused = false
         consecutiveHighFrames = 0
+        releaseSherpa()
+        Log.i(TAG, "KWS stopped")
+    }
+
+    override fun reloadConfiguration() {
+        releaseSherpa()
+        if (job?.isActive == true && !paused) {
+            ensureSherpa()
+        }
+        Log.i(TAG, "KWS config reloaded")
+    }
+
+    private fun releaseSherpa() {
         kwsStream?.release()
         kwsStream = null
         kws?.release()
         kws = null
-        Log.i(TAG, "KWS stopped")
     }
 
     /** 调试/通知栏手动触发唤醒 */
@@ -99,14 +115,21 @@ class SherpaWakeEngine(
         }
 
         return try {
+            val tuning = tuningProvider()
             val config = KeywordSpotterConfig(
                 featConfig = getFeatureConfig(sampleRate = SAMPLE_RATE, featureDim = 80),
                 modelConfig = kwsModelConfig(),
                 keywordsFile = keywordsPath,
+                keywordsScore = tuning.keywordsScore,
+                keywordsThreshold = tuning.keywordsThreshold,
             )
             kws = KeywordSpotter(assetManager = ctx.assets, config = config)
             kwsStream = kws!!.createStream()
-            Log.i(TAG, "Sherpa KeywordSpotter initialized words=${WakeWords.ALL}")
+            Log.i(
+                TAG,
+                "Sherpa KeywordSpotter initialized words=${WakeWords.ALL} " +
+                    "score=${tuning.keywordsScore} threshold=${tuning.keywordsThreshold}",
+            )
             true
         } catch (e: Throwable) {
             Log.e(TAG, "Sherpa init failed, fallback to energy", e)
@@ -233,10 +256,19 @@ class SherpaWakeEngine(
                 val now = System.currentTimeMillis()
                 if (now - lastWakeMs >= DEBOUNCE_MS) {
                     lastWakeMs = now
-                    val wakeWord = WakeWords.normalize(keyword)
-                    Log.i(TAG, "Sherpa wake keyword=$keyword -> $wakeWord")
+                    val resolved = KwsPhraseResolver.resolve(keyword)
+                    if (resolved == null) {
+                        Log.w(TAG, "Sherpa keyword ignored: $keyword")
+                        spotter.reset(stream)
+                        return true
+                    }
+                    val emitText = when (resolved) {
+                        is KwsDetectedPhrase.Wake -> resolved.word
+                        is KwsDetectedPhrase.OfflinePlayback -> resolved.phrase
+                    }
+                    Log.i(TAG, "Sherpa KWS keyword=$keyword -> $emitText ($resolved)")
                     spotter.reset(stream)
-                    _wakeEvents.emit(wakeWord)
+                    _wakeEvents.emit(emitText)
                 }
                 return true
             }

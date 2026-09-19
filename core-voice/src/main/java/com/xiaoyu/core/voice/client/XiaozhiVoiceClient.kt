@@ -61,6 +61,10 @@ class XiaozhiVoiceClient(
     @Volatile
     private var suppressWakeGreetingTts = false
 
+    /** 唤醒前主动重连 WS 时，不向会话层上报 Disconnected（避免误结束 WAKE_DETECTED） */
+    @Volatile
+    private var suppressDisconnectEvent = false
+
     val audioPipeline = OpusVoicePipeline()
 
     private val _events = MutableSharedFlow<VoiceEvent>(extraBufferCapacity = 64)
@@ -133,6 +137,11 @@ class XiaozhiVoiceClient(
         serverHelloReceived = false
         suppressWakeGreetingTts = false
         audioPipeline.detach()
+        if (suppressDisconnectEvent) {
+            suppressDisconnectEvent = false
+            Log.i(TAG, "WS disconnected (wake prep, no session event): $reason")
+            return
+        }
         _events.tryEmit(VoiceEvent.Disconnected(reason))
         Log.w(TAG, "WS disconnected: $reason")
         scheduleReconnect()
@@ -178,9 +187,13 @@ class XiaozhiVoiceClient(
         }
     }
 
-    fun disconnect(manual: Boolean = true) {
+    /**
+     * @param emitDisconnected 为 false 时仅本地清理，用于唤醒前重连，避免会话被误置 IDLE
+     */
+    fun disconnect(manual: Boolean = true, emitDisconnected: Boolean = true) {
         if (manual) autoReconnect = false
         reconnectJob?.cancel()
+        suppressDisconnectEvent = !emitDisconnected
         webSocket?.close(1000, "bye")
         webSocket = null
         connected.set(false)

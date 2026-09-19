@@ -52,7 +52,7 @@ class XiaoyuAppGraph private constructor(context: Context) {
     )
 
     val voiceClient = XiaozhiVoiceClient()
-    val wakeEngine: WakeEngine = SherpaWakeEngine(appContext)
+    val wakeEngine: WakeEngine = SherpaWakeEngine(appContext) { preferences.kwsTuning() }
 
     private val _sessionState = MutableStateFlow(VoiceSessionState.IDLE)
     val sessionState: StateFlow<VoiceSessionState> = _sessionState.asStateFlow()
@@ -151,11 +151,14 @@ class XiaoyuAppGraph private constructor(context: Context) {
                 when (reason) {
                     SessionEndReason.IDLE_TIMEOUT ->
                         voiceClient.endSessionAndDisconnect("user_idle")
-                    SessionEndReason.MANUAL ->
+                    SessionEndReason.MANUAL -> {
+                        playerFacade.discardResumeAfterVoiceSession()
                         voiceClient.endSessionAndDisconnect("user_cancel")
+                    }
                     SessionEndReason.DISCONNECT ->
                         voiceClient.endSessionAndDisconnect("disconnect")
                     SessionEndReason.GOODBYE -> {
+                        playerFacade.discardResumeAfterVoiceSession()
                         voiceClient.stopListening()
                         voiceClient.disconnect(manual = true)
                     }

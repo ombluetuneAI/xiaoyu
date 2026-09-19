@@ -9,6 +9,8 @@ interface WakeEngine {
     fun pause()
     fun resume()
     fun stop()
+    /** 设置变更后重新加载 Sherpa（运行中可调用） */
+    fun reloadConfiguration() {}
     /** 检测到唤醒词时 emit 中文唤醒词（如「小鱼同学」「小鱼小鱼」） */
     val wakeEvents: SharedFlow<String>
 }

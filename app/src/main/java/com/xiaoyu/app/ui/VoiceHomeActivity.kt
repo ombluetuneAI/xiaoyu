@@ -46,8 +46,9 @@ class VoiceHomeActivity : AppCompatActivity() {
             emit(graph.voiceClient.isConnected())
             graph.voiceClient.events.collect { event ->
                 when (event) {
-                    is VoiceEvent.Connected -> emit(true)
-                    is VoiceEvent.Disconnected -> emit(false)
+                    is VoiceEvent.Connected,
+                    is VoiceEvent.Disconnected,
+                    -> emit(graph.voiceClient.isConnected())
                     else -> Unit
                 }
             }
@@ -70,10 +71,10 @@ class VoiceHomeActivity : AppCompatActivity() {
                     XiaozhiBindState.NEEDS_ACTIVATION -> "小智绑定 · 待激活"
                     else -> "小智绑定 · 未知"
                 }
-                voiceStatus.text = when {
-                    ui.voiceWsConnected -> "语音 WS · 已连接"
-                    session == VoiceSessionState.IDLE -> "语音 WS · 待唤醒（正常未连）"
-                    else -> "语音 WS · 连接中…"
+                voiceStatus.text = if (ui.voiceWsConnected) {
+                    getString(R.string.voice_ws_connected)
+                } else {
+                    getString(R.string.voice_ws_disconnected)
                 }
                 sessionStatus.text = "会话 · ${sessionLabel(session)}"
                 statusSubtitle.text = when (session) {

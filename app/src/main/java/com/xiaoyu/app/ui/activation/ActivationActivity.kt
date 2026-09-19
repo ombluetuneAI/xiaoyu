@@ -59,8 +59,7 @@ class ActivationActivity : AppCompatActivity() {
                 Toast.makeText(this@ActivationActivity, "绑定成功", Toast.LENGTH_SHORT).show()
                 ContextCompat.startForegroundService(
                     this@ActivationActivity,
-                    Intent(this@ActivationActivity, XiaoyuAssistantService::class.java)
-                        .setAction(XiaoyuAssistantService.ACTION_CONNECT_VOICE),
+                    Intent(this@ActivationActivity, XiaoyuAssistantService::class.java),
                 )
                 startActivity(Intent(this@ActivationActivity, SettingsActivity::class.java))
                 finish()

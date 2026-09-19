@@ -57,6 +57,9 @@ class SettingsActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.rowTxb).setOnClickListener {
             startActivity(Intent(this, TxbSettingsActivity::class.java))
         }
+        findViewById<TextView>(R.id.rowKws).setOnClickListener {
+            startActivity(Intent(this, KwsSettingsActivity::class.java))
+        }
         findViewById<TextView>(R.id.rowBackground).setOnClickListener {
             startActivity(Intent(this, BackgroundCheckActivity::class.java))
         }
@@ -66,8 +69,7 @@ class SettingsActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.rowStartService).setOnClickListener {
             ContextCompat.startForegroundService(
                 this,
-                Intent(this, XiaoyuAssistantService::class.java)
-                    .setAction(XiaoyuAssistantService.ACTION_CONNECT_VOICE),
+                Intent(this, XiaoyuAssistantService::class.java),
             )
             Toast.makeText(this, "已启动语音前台服务，请查看通知栏", Toast.LENGTH_SHORT).show()
         }
@@ -110,8 +112,7 @@ class SettingsActivity : AppCompatActivity() {
         ) {
             ContextCompat.startForegroundService(
                 this,
-                Intent(this, XiaoyuAssistantService::class.java)
-                    .setAction(XiaoyuAssistantService.ACTION_CONNECT_VOICE),
+                Intent(this, XiaoyuAssistantService::class.java),
             )
         }
     }

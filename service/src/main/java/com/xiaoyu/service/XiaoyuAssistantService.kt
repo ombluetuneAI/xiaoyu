@@ -8,9 +8,12 @@ import android.os.IBinder
 import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.xiaoyu.core.media.Track
+import com.xiaoyu.core.router.MediaSource
 import com.xiaoyu.core.session.VoiceSessionState
 import com.xiaoyu.core.voice.client.VoiceEvent
 import com.xiaoyu.core.voice.ota.XiaozhiBindState
+import com.xiaoyu.core.wake.OfflineKwsCommands
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -95,6 +98,10 @@ class XiaoyuAssistantService : Service() {
             ACTION_DEBUG_PLAY_WAKE_TTS -> scope.launch {
                 graph.wakeAckPlayer.playRandom(onComplete = {})
             }
+            ACTION_RELOAD_KWS -> {
+                graph.wakeEngine.reloadConfiguration()
+                Log.i(TAG, "ACTION_RELOAD_KWS: wake engine reloaded")
+            }
             ACTION_TEST_PLAY -> scope.launch(Dispatchers.IO) {
                 val result = graph.mediaResolver.resolveGeneral(limit = 10)
                 if (!result.ok || result.tracks.isEmpty()) {
@@ -140,9 +147,73 @@ class XiaoyuAssistantService : Service() {
 
     private fun observeWake() {
         scope.launch {
-            graph.wakeEngine.wakeEvents.collectLatest { wakeWord ->
-                runWakeSession(trigger = "kws", wakeWord = wakeWord)
+            graph.wakeEngine.wakeEvents.collectLatest { phrase ->
+                val offlineAction = OfflineKwsCommands.playbackAction(phrase)
+                if (offlineAction != null) {
+                    if (graph.sessionState.value == VoiceSessionState.IDLE) {
+                        runOfflineKwsPlayback(offlineAction, phrase)
+                    } else {
+                        Log.i(TAG, "offline KWS「$phrase」ignored: session=${graph.sessionState.value}")
+                        graph.onSpeak?.invoke("请先结束语音对话，再说播控指令")
+                    }
+                    return@collectLatest
+                }
+                runWakeSession(trigger = "kws", wakeWord = phrase)
             }
+        }
+    }
+
+    private suspend fun runOfflineKwsPlayback(action: String, phrase: String) {
+        Log.i(TAG, "offline KWS「$phrase」action=$action")
+        if (graph.queueManager.tracks.value.isEmpty()) {
+            graph.onSpeak?.invoke("当前没有播放列表，请先播放音乐")
+            return
+        }
+        graph.activeMediaSource.set(MediaSource.XIAOYU, "offline.kws")
+        when (action) {
+            "next" -> playOfflineAdjacent(resolveOfflineNext(), "下一首")
+            "previous" -> playOfflineAdjacent(graph.queueManager.previous(), "上一首")
+            "pause" -> {
+                graph.playerFacade.pauseForUserRequest()
+                graph.mediaSessionManager.updateNotification()
+            }
+            "resume" -> {
+                graph.playerFacade.resume()
+                graph.mediaSessionManager.updateNotification()
+            }
+            else -> Unit
+        }
+    }
+
+    private fun resolveOfflineNext(): Track? {
+        val qm = graph.queueManager
+        val next = qm.next()
+        if (next != null) return next
+        val list = qm.tracks.value
+        if (list.size <= 1) return null
+        val idx = (qm.currentIndex.value + 1) % list.size
+        qm.jumpTo(idx)
+        return qm.currentTrack()
+    }
+
+    private suspend fun playOfflineAdjacent(track: Track?, label: String) {
+        if (track == null) {
+            graph.onSpeak?.invoke(if (label == "下一首") "没有下一首了" else "没有上一首了")
+            return
+        }
+        val resolved = withContext(Dispatchers.IO) {
+            graph.mediaResolver.resolveTrackUrl(track)
+        } ?: track
+        if (resolved.url.isBlank()) {
+            graph.onSpeak?.invoke("$label 无法播放")
+            return
+        }
+        val ok = graph.playerFacade.playTrackAwait(resolved, graph.queueManager.mode.value)
+        if (ok) {
+            graph.mediaSessionManager.updateNotification()
+            Log.i(TAG, "offline KWS $label -> ${resolved.title}")
+        } else {
+            graph.onSpeak?.invoke("播放失败")
         }
     }
 
@@ -186,12 +257,21 @@ class XiaoyuAssistantService : Service() {
             graph.voiceClient.events.collectLatest { event ->
                 when (event) {
                     is VoiceEvent.Connected -> {
-                        updateNotification("小鱼同学", "语音会话已连接")
-                        Log.i(TAG, "voice WS connected (session)")
+                        if (graph.sessionState.value == VoiceSessionState.IDLE) {
+                            updateNotification("小鱼同学待命中", "说「小鱼同学」唤醒")
+                        } else {
+                            updateNotification("小鱼同学", "语音会话已连接")
+                        }
+                        Log.i(TAG, "voice WS connected session=${graph.sessionState.value}")
                     }
                     is VoiceEvent.Disconnected -> {
+                        val session = graph.sessionState.value
+                        if (session == VoiceSessionState.WAKE_DETECTED) {
+                            Log.i(TAG, "WS disconnected during wake prep, keep session")
+                            return@collectLatest
+                        }
                         updateNotification("小鱼同学待命中", "说唤醒词开始对话")
-                        if (graph.sessionState.value != VoiceSessionState.IDLE) {
+                        if (session != VoiceSessionState.IDLE) {
                             Log.i(TAG, "voice disconnected during session -> end quietly")
                             graph.sessionManager.endSession(com.xiaoyu.core.session.SessionEndReason.DISCONNECT)
                         }
@@ -205,7 +285,15 @@ class XiaoyuAssistantService : Service() {
                     is VoiceEvent.TtsComplete -> graph.sessionManager.onTtsComplete()
                     is VoiceEvent.SttResult -> {
                         graph.sessionManager.onUserActivity()
-                        if (event.text.contains("再见")) graph.sessionManager.onGoodbye()
+                        val stt = event.text
+                        if (stt.contains("暂停") || stt.contains("停一下") || stt.contains("别播")) {
+                            graph.playerFacade.pauseForUserRequest()
+                            graph.mediaSessionManager.updateNotification()
+                        }
+                        if (stt.contains("再见")) {
+                            graph.playerFacade.discardResumeAfterVoiceSession()
+                            graph.sessionManager.onGoodbye()
+                        }
                     }
                     is VoiceEvent.Error -> Log.w(TAG, "voice error: ${event.message}")
                     else -> Unit
@@ -218,6 +306,7 @@ class XiaoyuAssistantService : Service() {
                     VoiceSessionState.IDLE -> {
                         releaseVoiceWakeLock()
                         graph.playerFacade.tryResumeMusicAfterVoiceSession()
+                        ensureVoiceDisconnectedWhileIdle()
                         updateNotification("小鱼同学待命中", "说「小鱼同学」唤醒")
                     }
                     VoiceSessionState.WAKE_DETECTED -> updateNotification("小鱼同学", "应答中…")
@@ -226,12 +315,18 @@ class XiaoyuAssistantService : Service() {
                         val sec = graph.preferences.followUpTimeoutSec
                         updateNotification("正在听…", "${sec}s 无说话将自动退出")
                     }
-                    VoiceSessionState.THINKING -> updateNotification("思考中…", "等待小智")
+                    VoiceSessionState.THINKING -> {
+                        graph.playerFacade.pauseMusicForVoiceOutput()
+                        updateNotification("思考中…", "等待小智")
+                    }
                     VoiceSessionState.SPEAKING -> {
                         acquireVoiceWakeLock()
+                        graph.playerFacade.pauseMusicForVoiceOutput()
                         updateNotification("正在说…", "TTS 播报中")
                     }
                     VoiceSessionState.FOLLOW_UP -> {
+                        acquireVoiceWakeLock()
+                        graph.playerFacade.tryResumeMusicAfterVoiceSession()
                         val sec = graph.preferences.followUpTimeoutSec
                         updateNotification("连续对话中…", "${sec}s 内无需唤醒词")
                     }
@@ -268,6 +363,13 @@ class XiaoyuAssistantService : Service() {
         }
     }
 
+    /** 待命态不保持语音 WS；仅唤醒/会话期间连接 */
+    private fun ensureVoiceDisconnectedWhileIdle() {
+        if (!graph.voiceClient.isConnected()) return
+        graph.voiceClient.disconnect(manual = true, emitDisconnected = true)
+        Log.i(TAG, "voice WS closed: session IDLE")
+    }
+
     private fun ensureVoiceConnected() {
         if (graph.voiceClient.isConnected()) return
         val bind = graph.bindManager.websocketConfig() ?: return
@@ -278,7 +380,7 @@ class XiaoyuAssistantService : Service() {
     }
 
     private suspend fun prepareVoiceForWake(): Boolean {
-        graph.voiceClient.disconnect(manual = true)
+        graph.voiceClient.disconnect(manual = true, emitDisconnected = false)
         if (!ensureVoiceConnectedAwait(timeoutMs = 12_000L)) {
             Log.w(TAG, "prepareVoiceForWake: WS connect timeout")
             return false
@@ -349,5 +451,6 @@ class XiaoyuAssistantService : Service() {
         const val ACTION_TEST_PLAY = "com.xiaoyu.action.TEST_PLAY"
         const val ACTION_DEBUG_SIMULATE_KWS = "com.xiaoyu.action.DEBUG_SIMULATE_KWS"
         const val ACTION_DEBUG_PLAY_WAKE_TTS = "com.xiaoyu.action.DEBUG_PLAY_WAKE_TTS"
+        const val ACTION_RELOAD_KWS = "com.xiaoyu.action.RELOAD_KWS"
     }
 }

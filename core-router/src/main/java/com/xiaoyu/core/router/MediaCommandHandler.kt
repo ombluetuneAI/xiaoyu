@@ -345,7 +345,7 @@ class MediaCommandHandler(
 
             MediaSource.XIAOYU -> when (action) {
 
-                "pause" -> ok("已暂停").also { playerFacade.pause() }
+                "pause" -> ok("已暂停").also { playerFacade.pauseForUserRequest() }
 
                 "resume" -> ok("继续播放").also { playerFacade.resume() }
 

@@ -43,7 +43,15 @@ class BindDetailActivity : AppCompatActivity() {
                 append("WebSocket: ")
                 append(ws?.url ?: "—")
                 append("\n状态: ")
-                append(if (connected) "已连接" else if (bindState == XiaozhiBindState.BOUND) "未连接（服务将自动重连）" else "不可用")
+                append(
+                    if (connected) {
+                        "已连接"
+                    } else if (bindState == XiaozhiBindState.BOUND) {
+                        "未连接"
+                    } else {
+                        "不可用"
+                    },
+                )
             }
             val code = graph.bindManager.activationCode.value
             if (bindState == XiaozhiBindState.NEEDS_ACTIVATION && !code.isNullOrBlank()) {
@@ -69,8 +77,7 @@ class BindDetailActivity : AppCompatActivity() {
                 if (state == XiaozhiBindState.BOUND) {
                     ContextCompat.startForegroundService(
                         this@BindDetailActivity,
-                        Intent(this@BindDetailActivity, XiaoyuAssistantService::class.java)
-                            .setAction(XiaoyuAssistantService.ACTION_CONNECT_VOICE),
+                        Intent(this@BindDetailActivity, XiaoyuAssistantService::class.java),
                     )
                 }
             }

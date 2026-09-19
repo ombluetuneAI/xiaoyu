@@ -166,6 +166,17 @@ class MediaPlayerFacade(
 
     fun pause() = runOnMain { player.pause() }
 
+    /** 用户/小智 MCP/离线播控明确要求暂停：会话结束后不要自动续播 */
+    fun pauseForUserRequest() = runOnMain {
+        resumeMusicAfterVoice = false
+        player.pause()
+    }
+
+    /** 用户说再见或主动结束会话：清除「语音结束后续播」意图 */
+    fun discardResumeAfterVoiceSession() {
+        runOnMain { resumeMusicAfterVoice = false }
+    }
+
     fun resume() = runOnMain {
         audioFocus?.requestForPlayback()
         player.play()
@@ -209,6 +220,7 @@ class MediaPlayerFacade(
     }
 
     fun stop() = runOnMain {
+        resumeMusicAfterVoice = false
         player.stop()
         audioFocus?.abandonPlaybackFocus()
     }

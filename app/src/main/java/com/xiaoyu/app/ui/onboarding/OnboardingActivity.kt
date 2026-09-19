@@ -51,8 +51,7 @@ class OnboardingActivity : AppCompatActivity() {
                 graph.preferences.onboardingCompleted = true
                 ContextCompat.startForegroundService(
                     this@OnboardingActivity,
-                    Intent(this@OnboardingActivity, XiaoyuAssistantService::class.java)
-                        .setAction(XiaoyuAssistantService.ACTION_CONNECT_VOICE),
+                    Intent(this@OnboardingActivity, XiaoyuAssistantService::class.java),
                 )
                 startActivity(Intent(this@OnboardingActivity, SettingsActivity::class.java))
                 finish()

@@ -36,6 +36,7 @@
         <activity android:name=".ui.activation.ActivationActivity" android:exported="false" />
         <activity android:name=".ui.settings.SettingsActivity" android:exported="false" />
         <activity android:name=".ui.settings.TxbSettingsActivity" android:exported="false" />
+        <activity android:name=".ui.settings.KwsSettingsActivity" android:exported="false" />
         <activity android:name=".ui.settings.BindDetailActivity" android:exported="false" />
         <activity android:name=".ui.settings.BackgroundCheckActivity" android:exported="false" />
         <activity android:name=".ui.settings.AdapterAppsActivity" android:exported="false" />
