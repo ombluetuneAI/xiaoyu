@@ -129,8 +129,7 @@ class XiaoyuAppGraph private constructor(context: Context) {
         commandRouter = CommandRouter(registry, linkDispatcher)
         deviceMcpServer = DeviceMcpServer(mediaCommandHandler)
         voiceClient.mcpHandler = { payload -> deviceMcpServer.handleMcpPayload(payload) }
-        voiceClient.onTtsStart = { audioFocus.duckForVoiceTts() }
-        voiceClient.onTtsComplete = { audioFocus.unduckAfterVoiceTts() }
+        voiceClient.onTtsStart = { playerFacade.pauseMusicForVoiceOutput() }
 
         wakeAckPlayer = WakeAckPlayer(ctx)
 

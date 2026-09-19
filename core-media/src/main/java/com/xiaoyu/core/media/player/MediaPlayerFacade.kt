@@ -49,20 +49,21 @@ class MediaPlayerFacade(
     private var radioRetryCount = 0
     private var radioStationName: String? = null
     private val mainHandler = Handler(Looper.getMainLooper())
+    /** 系统夺焦前是否在播；仅在此为 true 时响应 AUDIOFOCUS_GAIN 自动续播 */
+    private var shouldResumeOnFocusGain = false
+    /** 语音会话/小智 TTS 期间暂停的背景乐，会话结束后再恢复 */
+    private var resumeMusicAfterVoice = false
 
     private fun runOnMain(block: () -> Unit) {
         if (Looper.myLooper() == Looper.getMainLooper()) block() else mainHandler.post(block)
     }
 
     init {
-        audioFocus?.onDuck = { scope.launch(Dispatchers.Main) { player.volume = 0.3f } }
+        audioFocus?.onDuck = { scope.launch(Dispatchers.Main) { pauseForTransientFocusLoss() } }
         audioFocus?.onUnduck = { scope.launch(Dispatchers.Main) { player.volume = 1f } }
-        audioFocus?.onPausePlayback = { scope.launch(Dispatchers.Main) { player.pause() } }
+        audioFocus?.onPausePlayback = { scope.launch(Dispatchers.Main) { pauseForTransientFocusLoss() } }
         audioFocus?.onResumePlayback = {
-            scope.launch(Dispatchers.Main) {
-                player.volume = 1f
-                if (queueManager.currentTrack() != null) player.play()
-            }
+            scope.launch(Dispatchers.Main) { resumeAfterTransientFocusGain() }
         }
 
         player.addListener(object : Player.Listener {
@@ -167,6 +168,43 @@ class MediaPlayerFacade(
 
     fun resume() = runOnMain {
         audioFocus?.requestForPlayback()
+        player.play()
+    }
+
+    /** 唤醒或小智播报前：若在播音乐则暂停并标记稍后恢复 */
+    fun pauseMusicForVoiceOutput() {
+        runOnMain {
+            if (player.isPlaying) {
+                resumeMusicAfterVoice = true
+                player.pause()
+            }
+        }
+    }
+
+    /** 语音会话结束（回到 IDLE）时恢复被语音打断的背景乐 */
+    fun tryResumeMusicAfterVoiceSession() {
+        runOnMain {
+            if (!resumeMusicAfterVoice) return@runOnMain
+            resumeMusicAfterVoice = false
+            if (queueManager.currentTrack() == null) return@runOnMain
+            audioFocus?.requestForPlayback()
+            player.volume = 1f
+            player.play()
+        }
+    }
+
+    private fun pauseForTransientFocusLoss() {
+        if (player.isPlaying) {
+            shouldResumeOnFocusGain = true
+            player.pause()
+        }
+    }
+
+    private fun resumeAfterTransientFocusGain() {
+        if (!shouldResumeOnFocusGain) return
+        shouldResumeOnFocusGain = false
+        if (queueManager.currentTrack() == null) return
+        player.volume = 1f
         player.play()
     }
 

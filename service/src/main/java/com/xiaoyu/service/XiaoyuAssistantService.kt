@@ -156,6 +156,7 @@ class XiaoyuAssistantService : Service() {
             }
             val playLocalWakeAck = trigger == "kws" || trigger == "debug_kws"
             Log.i(TAG, "wake word detected: $wakeWord trigger=$trigger")
+            graph.playerFacade.pauseMusicForVoiceOutput()
             graph.sessionManager.onWakeWordDetected(true, wakeWord)
 
             coroutineScope {
@@ -216,6 +217,7 @@ class XiaoyuAssistantService : Service() {
                 when (state) {
                     VoiceSessionState.IDLE -> {
                         releaseVoiceWakeLock()
+                        graph.playerFacade.tryResumeMusicAfterVoiceSession()
                         updateNotification("小鱼同学待命中", "说「小鱼同学」唤醒")
                     }
                     VoiceSessionState.WAKE_DETECTED -> updateNotification("小鱼同学", "应答中…")
