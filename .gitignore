@@ -25,6 +25,8 @@ Thumbs.db
 *.keystore
 *.p12
 *.pem
+keystore.properties
+keystore/
 
 # Outputs
 *.apk
