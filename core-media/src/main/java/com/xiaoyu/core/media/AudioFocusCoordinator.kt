@@ -14,14 +14,16 @@ class AudioFocusCoordinator(context: Context) {
     var onDuck: (() -> Unit)? = null
     var onUnduck: (() -> Unit)? = null
     var onPausePlayback: (() -> Unit)? = null
+
+    /** 永久失焦（用户切到其它音频 App）：暂停且不应自动续播 */
+    var onLossPermanent: (() -> Unit)? = null
     var onResumePlayback: (() -> Unit)? = null
 
     private val playbackListener = AudioManager.OnAudioFocusChangeListener { change ->
         when (change) {
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> onDuck?.invoke()
-            AudioManager.AUDIOFOCUS_LOSS,
-            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
-            -> onPausePlayback?.invoke()
+            AudioManager.AUDIOFOCUS_LOSS -> onLossPermanent?.invoke()
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> onPausePlayback?.invoke()
             AudioManager.AUDIOFOCUS_GAIN -> onResumePlayback?.invoke()
         }
     }

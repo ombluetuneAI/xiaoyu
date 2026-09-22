@@ -17,7 +17,7 @@ class MediaControlReceiver : BroadcastReceiver() {
 
     private fun handleToggle(graph: XiaoyuAppGraph) {
         if (graph.activeMediaSource.current == MediaSource.XIAOYU) {
-            if (graph.playerFacade.isPlaying()) graph.playerFacade.pause() else graph.playerFacade.resume()
+            if (graph.playerFacade.isPlaying()) graph.playerFacade.pauseForUserRequest() else graph.playerFacade.resume()
             graph.mediaSessionManager.updateNotification()
         }
     }
