@@ -64,7 +64,7 @@ class PlayerActivity : AppCompatActivity() {
         }
 
         btnPlayPause.setOnClickListener {
-            if (graph.playerFacade.isPlaying()) graph.playerFacade.pause() else graph.playerFacade.resume()
+            if (graph.playerFacade.isPlaying()) graph.playerFacade.pauseForUserRequest() else graph.playerFacade.resume()
             refreshUi()
         }
         btnPrevious.setOnClickListener {

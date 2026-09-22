@@ -49,10 +49,8 @@ class MediaPlayerFacade(
     private var radioRetryCount = 0
     private var radioStationName: String? = null
     private val mainHandler = Handler(Looper.getMainLooper())
-    /** 系统夺焦前是否在播；仅在此为 true 时响应 AUDIOFOCUS_GAIN 自动续播 */
-    private var shouldResumeOnFocusGain = false
-    /** 语音会话/小智 TTS 期间暂停的背景乐，会话结束后再恢复 */
-    private var resumeMusicAfterVoice = false
+    /** 自动续播意图仲裁：用户显式暂停会作废一切待定续播 */
+    private val resumeArbiter = PlaybackResumeArbiter()
 
     private fun runOnMain(block: () -> Unit) {
         if (Looper.myLooper() == Looper.getMainLooper()) block() else mainHandler.post(block)
@@ -62,6 +60,7 @@ class MediaPlayerFacade(
         audioFocus?.onDuck = { scope.launch(Dispatchers.Main) { pauseForTransientFocusLoss() } }
         audioFocus?.onUnduck = { scope.launch(Dispatchers.Main) { player.volume = 1f } }
         audioFocus?.onPausePlayback = { scope.launch(Dispatchers.Main) { pauseForTransientFocusLoss() } }
+        audioFocus?.onLossPermanent = { scope.launch(Dispatchers.Main) { pauseForPermanentFocusLoss() } }
         audioFocus?.onResumePlayback = {
             scope.launch(Dispatchers.Main) { resumeAfterTransientFocusGain() }
         }
@@ -164,17 +163,21 @@ class MediaPlayerFacade(
         playTrack(track, queueManager.mode.value)
     }
 
-    fun pause() = runOnMain { player.pause() }
+    /** 用户显式暂停（通知栏/播放页）：作废一切自动续播意图，让暂停粘手 */
+    fun pause() = runOnMain {
+        resumeArbiter.onUserPause()
+        player.pause()
+    }
 
-    /** 用户/小智 MCP/离线播控明确要求暂停：会话结束后不要自动续播 */
+    /** 用户/小智 MCP/离线播控明确要求暂停：作废一切自动续播意图 */
     fun pauseForUserRequest() = runOnMain {
-        resumeMusicAfterVoice = false
+        resumeArbiter.onUserPause()
         player.pause()
     }
 
     /** 用户说再见或主动结束会话：清除「语音结束后续播」意图 */
     fun discardResumeAfterVoiceSession() {
-        runOnMain { resumeMusicAfterVoice = false }
+        runOnMain { resumeArbiter.cancelVoiceResume() }
     }
 
     fun resume() = runOnMain {
@@ -185,8 +188,8 @@ class MediaPlayerFacade(
     /** 唤醒或小智播报前：若在播音乐则暂停并标记稍后恢复 */
     fun pauseMusicForVoiceOutput() {
         runOnMain {
+            resumeArbiter.onVoiceOutputPaused(player.isPlaying)
             if (player.isPlaying) {
-                resumeMusicAfterVoice = true
                 player.pause()
             }
         }
@@ -195,8 +198,7 @@ class MediaPlayerFacade(
     /** 语音会话结束（回到 IDLE）时恢复被语音打断的背景乐 */
     fun tryResumeMusicAfterVoiceSession() {
         runOnMain {
-            if (!resumeMusicAfterVoice) return@runOnMain
-            resumeMusicAfterVoice = false
+            if (!resumeArbiter.consumeVoiceResume()) return@runOnMain
             if (queueManager.currentTrack() == null) return@runOnMain
             audioFocus?.requestForPlayback()
             player.volume = 1f
@@ -205,22 +207,30 @@ class MediaPlayerFacade(
     }
 
     private fun pauseForTransientFocusLoss() {
+        resumeArbiter.onTransientFocusLossPaused(player.isPlaying)
         if (player.isPlaying) {
-            shouldResumeOnFocusGain = true
             player.pause()
         }
     }
 
+    /** 永久失焦（用户切到其它音频 App）：暂停且不再自动续播，主动让出焦点 */
+    private fun pauseForPermanentFocusLoss() {
+        resumeArbiter.onPermanentFocusLoss()
+        if (player.isPlaying) {
+            player.pause()
+        }
+        audioFocus?.abandonPlaybackFocus()
+    }
+
     private fun resumeAfterTransientFocusGain() {
-        if (!shouldResumeOnFocusGain) return
-        shouldResumeOnFocusGain = false
+        if (!resumeArbiter.consumeFocusResume()) return
         if (queueManager.currentTrack() == null) return
         player.volume = 1f
         player.play()
     }
 
     fun stop() = runOnMain {
-        resumeMusicAfterVoice = false
+        resumeArbiter.onStop()
         player.stop()
         audioFocus?.abandonPlaybackFocus()
     }
