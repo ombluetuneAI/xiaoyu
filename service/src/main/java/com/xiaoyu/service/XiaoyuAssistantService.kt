@@ -171,7 +171,14 @@ class XiaoyuAssistantService : Service() {
         }
         graph.activeMediaSource.set(MediaSource.XIAOYU, "offline.kws")
         when (action) {
-            "next" -> playOfflineAdjacent(resolveOfflineNext(), "下一首")
+            "next" -> {
+                if (graph.playerFacade.blocksOfflineNextWhileUserPaused()) {
+                    Log.i(TAG, "offline KWS「$phrase」ignored: user sticky pause")
+                    graph.onSpeak?.invoke("当前已暂停，请先说继续播放")
+                    return
+                }
+                playOfflineAdjacent(resolveOfflineNext(), "下一首")
+            }
             "previous" -> playOfflineAdjacent(graph.queueManager.previous(), "上一首")
             "pause" -> {
                 graph.playerFacade.pauseForUserRequest()

@@ -134,6 +134,7 @@ class MediaPlayerFacade(
     }
 
     private fun playTrackInternal(track: Track, mode: PlaybackMode, stopPrevious: Boolean) {
+        resumeArbiter.onUserResumePlayback()
         if (stopPrevious && currentMode == PlaybackMode.RADIO && mode != PlaybackMode.RADIO) {
             player.stop()
         }
@@ -181,9 +182,13 @@ class MediaPlayerFacade(
     }
 
     fun resume() = runOnMain {
+        resumeArbiter.onUserResumePlayback()
         audioFocus?.requestForPlayback()
         player.play()
     }
+
+    /** 用户显式暂停期间为 true：离线 KWS「下一首」应忽略 */
+    fun blocksOfflineNextWhileUserPaused(): Boolean = resumeArbiter.blocksOfflineNextWhilePaused()
 
     /** 唤醒或小智播报前：若在播音乐则暂停并标记稍后恢复 */
     fun pauseMusicForVoiceOutput() {

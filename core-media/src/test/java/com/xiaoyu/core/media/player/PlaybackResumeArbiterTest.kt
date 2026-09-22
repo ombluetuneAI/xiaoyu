@@ -90,6 +90,15 @@ class PlaybackResumeArbiterTest {
     }
 
     @Test
+    fun userStickyPause_blocksOfflineNextUntilResume() {
+        val arbiter = PlaybackResumeArbiter()
+        arbiter.onUserPause()
+        assertTrue(arbiter.blocksOfflineNextWhilePaused())
+        arbiter.onUserResumePlayback()
+        assertFalse(arbiter.blocksOfflineNextWhilePaused())
+    }
+
+    @Test
     fun stop_clearsBothIntents() {
         val arbiter = PlaybackResumeArbiter()
         arbiter.onVoiceOutputPaused(wasPlaying = true)

@@ -21,6 +21,10 @@ class PlaybackResumeArbiter {
     var resumeOnFocusGain: Boolean = false
         private set
 
+    /** 用户显式暂停后保持，直到继续播放/新开一曲；用于忽略离线「下一首」误触 */
+    var userStickyPause: Boolean = false
+        private set
+
     /** 唤醒/TTS 前暂停背景乐：仅当此前确在播放时，才记下会话后续播意图 */
     fun onVoiceOutputPaused(wasPlaying: Boolean) {
         if (wasPlaying) resumeAfterVoice = true
@@ -62,11 +66,20 @@ class PlaybackResumeArbiter {
     fun onUserPause() {
         resumeAfterVoice = false
         resumeOnFocusGain = false
+        userStickyPause = true
     }
+
+    /** 用户继续播放或开始播放新曲目：解除暂停粘手 */
+    fun onUserResumePlayback() {
+        userStickyPause = false
+    }
+
+    fun blocksOfflineNextWhilePaused(): Boolean = userStickyPause
 
     /** 停止播放：清空全部续播意图 */
     fun onStop() {
         resumeAfterVoice = false
         resumeOnFocusGain = false
+        userStickyPause = false
     }
 }
