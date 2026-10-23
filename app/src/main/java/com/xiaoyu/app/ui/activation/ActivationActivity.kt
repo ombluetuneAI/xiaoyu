@@ -12,7 +12,8 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.xiaoyu.app.R
-import com.xiaoyu.app.ui.settings.SettingsActivity
+import com.xiaoyu.app.ui.VoiceHomeActivity
+import com.xiaoyu.app.ui.onboarding.OnboardingActivity
 import com.xiaoyu.core.voice.ota.XiaozhiBindState
 import com.xiaoyu.service.XiaoyuAppGraph
 import com.xiaoyu.service.XiaoyuAssistantService
@@ -55,13 +56,21 @@ class ActivationActivity : AppCompatActivity() {
             val state = withContext(Dispatchers.IO) { graph.bindManager.refresh() }
             codeView.text = graph.bindManager.activationCode.value ?: "—"
             if (state == XiaozhiBindState.BOUND) {
-                graph.preferences.onboardingCompleted = true
                 Toast.makeText(this@ActivationActivity, "绑定成功", Toast.LENGTH_SHORT).show()
                 ContextCompat.startForegroundService(
                     this@ActivationActivity,
                     Intent(this@ActivationActivity, XiaoyuAssistantService::class.java),
                 )
-                startActivity(Intent(this@ActivationActivity, SettingsActivity::class.java))
+                val fromOnboarding = intent.getBooleanExtra(EXTRA_FROM_ONBOARDING, false)
+                if (fromOnboarding) {
+                    startActivity(
+                        Intent(this@ActivationActivity, OnboardingActivity::class.java)
+                            .putExtra(OnboardingActivity.EXTRA_START_STEP, 4),
+                    )
+                } else {
+                    graph.preferences.onboardingCompleted = true
+                    startActivity(Intent(this@ActivationActivity, VoiceHomeActivity::class.java))
+                }
                 finish()
             } else if (!silent) {
                 Toast.makeText(this@ActivationActivity, "仍未绑定，请继续在智控台输入激活码", Toast.LENGTH_SHORT).show()
@@ -73,5 +82,9 @@ class ActivationActivity : AppCompatActivity() {
         val cm = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
         cm.setPrimaryClip(ClipData.newPlainText("xiaoyu", text))
         Toast.makeText(this, "已复制", Toast.LENGTH_SHORT).show()
+    }
+
+    companion object {
+        const val EXTRA_FROM_ONBOARDING = "from_onboarding"
     }
 }
