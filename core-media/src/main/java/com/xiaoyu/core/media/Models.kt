@@ -6,6 +6,20 @@ enum class PlaybackMode {
     RADIO,
 }
 
+/** 列表内切歌顺序：顺序 → 随机 → 单曲循环（与 [PlaybackMode] 内容类型无关） */
+enum class QueueOrderMode {
+    SEQUENTIAL,
+    SHUFFLE,
+    LOOP_ONE,
+    ;
+
+    fun next(): QueueOrderMode = when (this) {
+        SEQUENTIAL -> SHUFFLE
+        SHUFFLE -> LOOP_ONE
+        LOOP_ONE -> SEQUENTIAL
+    }
+}
+
 data class Track(
     val id: String,
     val title: String,

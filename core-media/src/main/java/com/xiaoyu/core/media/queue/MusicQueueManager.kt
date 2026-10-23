@@ -1,7 +1,9 @@
 package com.xiaoyu.core.media.queue
 
 import com.xiaoyu.core.media.PlaybackMode
+import com.xiaoyu.core.media.QueueOrderMode
 import com.xiaoyu.core.media.Track
+import kotlin.random.Random
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,6 +17,9 @@ class MusicQueueManager {
 
     private val _mode = MutableStateFlow(PlaybackMode.SINGLE)
     val mode: StateFlow<PlaybackMode> = _mode.asStateFlow()
+
+    private val _orderMode = MutableStateFlow(QueueOrderMode.SEQUENTIAL)
+    val orderMode: StateFlow<QueueOrderMode> = _orderMode.asStateFlow()
 
     private val _queueLabel = MutableStateFlow<String?>(null)
     val queueLabel: StateFlow<String?> = _queueLabel.asStateFlow()
@@ -48,15 +53,36 @@ class MusicQueueManager {
         }
     }
 
+    fun cycleOrderMode(): QueueOrderMode {
+        _orderMode.value = _orderMode.value.next()
+        return _orderMode.value
+    }
+
     fun next(): Track? {
         val list = _tracks.value
         if (list.isEmpty()) return null
         val track = when (_mode.value) {
             PlaybackMode.SINGLE -> null
             PlaybackMode.QUEUE_LOOP -> {
-                val next = (_currentIndex.value + 1) % list.size
-                _currentIndex.value = next
-                list[next]
+                when (_orderMode.value) {
+                    QueueOrderMode.LOOP_ONE -> list[_currentIndex.value]
+                    QueueOrderMode.SHUFFLE -> {
+                        if (list.size == 1) list[0]
+                        else {
+                            var next = Random.nextInt(list.size)
+                            while (next == _currentIndex.value) {
+                                next = Random.nextInt(list.size)
+                            }
+                            _currentIndex.value = next
+                            list[next]
+                        }
+                    }
+                    QueueOrderMode.SEQUENTIAL -> {
+                        val next = (_currentIndex.value + 1) % list.size
+                        _currentIndex.value = next
+                        list[next]
+                    }
+                }
             }
             PlaybackMode.RADIO -> list.firstOrNull()
         }
@@ -71,10 +97,25 @@ class MusicQueueManager {
             syncNowPlaying()
             return currentTrack()
         }
-        val prev = if (_currentIndex.value == 0) list.size - 1 else _currentIndex.value - 1
-        _currentIndex.value = prev
-        syncNowPlaying()
-        return list[prev]
+        when (_orderMode.value) {
+            QueueOrderMode.LOOP_ONE -> return list[_currentIndex.value]
+            QueueOrderMode.SHUFFLE -> {
+                if (list.size == 1) return list[0]
+                var prev = Random.nextInt(list.size)
+                while (prev == _currentIndex.value) {
+                    prev = Random.nextInt(list.size)
+                }
+                _currentIndex.value = prev
+                syncNowPlaying()
+                return list[prev]
+            }
+            QueueOrderMode.SEQUENTIAL -> {
+                val prev = if (_currentIndex.value == 0) list.size - 1 else _currentIndex.value - 1
+                _currentIndex.value = prev
+                syncNowPlaying()
+                return list[prev]
+            }
+        }
     }
 
     private fun syncNowPlaying() {

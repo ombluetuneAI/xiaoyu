@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="@color/xiaoyu_text"
+        android:pathData="M3.24,6.15C4.03,5.31 5.11,4.85 6.27,4.85c1.16,0 2.24,0.46 3.03,1.3l1.41,-1.41C9.63,3.25 7.99,2.5 6.27,2.5 4.55,2.5 2.91,3.25 1.59,4.74l1.65,1.41zM9.63,19.15c-0.79,0.84 -1.87,1.3 -3.03,1.3 -1.16,0 -2.24,-0.46 -3.03,-1.3l-1.41,1.41C2.91,20.75 4.55,21.5 6.27,21.5c1.72,0 3.36,-0.75 4.68,-2.24l-1.32,-1.11zM21.41,11.58l-4.96,-4.96 -2.12,2.12 2.83,2.83 -5.66,5.66 1.41,1.41 5.66,-5.66 2.83,2.83 2.12,-2.12z" />
+</vector>

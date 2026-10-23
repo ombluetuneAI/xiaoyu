@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Material-style format_list_numbered: distinct from shuffle / repeat_one / queue -->
+    <path
+        android:fillColor="@color/xiaoyu_text"
+        android:pathData="M2,17h2v0.5H2V17zM2,14h2v0.5H2V14zM2,11h2v0.5H2V11zM2,8h2v0.5H2V8zM6,17h12v-2H6v2zM6,14h12v-2H6v2zM6,11h12V9H6v2zM6,8h12V6H6v2z" />
+</vector>

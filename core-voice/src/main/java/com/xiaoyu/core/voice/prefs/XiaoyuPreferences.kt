@@ -49,6 +49,14 @@ class XiaoyuPreferences(context: Context) {
         get() = prefs.getBoolean(KEY_ONBOARDING, false)
         set(value) = prefs.edit().putBoolean(KEY_ONBOARDING, value).apply()
 
+    /** 用户已完成后台保活引导（检测页点「完成」） */
+    var keepaliveGuideCompleted: Boolean
+        get() = prefs.getBoolean(KEY_KEEPALIVE_DONE, false)
+        set(value) = prefs.edit().putBoolean(KEY_KEEPALIVE_DONE, value).apply()
+
+    fun shouldShowKeepaliveBanner(): Boolean =
+        onboardingCompleted && !keepaliveGuideCompleted
+
     var kwsKeywordsScore: Float
         get() = prefs.getFloat(KEY_KWS_SCORE, KwsTuning.DEFAULT.keywordsScore)
             .coerceIn(KwsTuning.MIN_SCORE, KwsTuning.MAX_SCORE)
@@ -96,6 +104,7 @@ class XiaoyuPreferences(context: Context) {
         private const val KEY_FOLLOW_UP = "follow_up_timeout_sec"
         private const val KEY_BG_VOICE = "background_voice"
         private const val KEY_ONBOARDING = "onboarding_completed"
+        private const val KEY_KEEPALIVE_DONE = "keepalive_guide_completed"
         private const val KEY_KWS_SCORE = "kws_keywords_score"
         private const val KEY_KWS_THRESHOLD = "kws_keywords_threshold"
         private const val KEY_KWS_MIGRATED_SENSITIVE = "kws_migrated_sensitive_v1"

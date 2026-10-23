@@ -11,6 +11,8 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.xiaoyu.app.R
+import com.xiaoyu.app.ui.VoiceHomeActivity
+import com.xiaoyu.service.XiaoyuAppGraph
 import com.xiaoyu.service.XiaoyuAssistantService
 
 class BackgroundCheckActivity : AppCompatActivity() {
@@ -33,7 +35,21 @@ class BackgroundCheckActivity : AppCompatActivity() {
                 Toast.makeText(this, "请手动在系统设置中允许自启动", Toast.LENGTH_LONG).show()
             }
         }
-        findViewById<Button>(R.id.btnDone).setOnClickListener { finish() }
+        findViewById<Button>(R.id.btnDone).setOnClickListener {
+            XiaoyuAppGraph.get(this).preferences.keepaliveGuideCompleted = true
+            finishWithDestination()
+        }
+        findViewById<Button>(R.id.btnLater).setOnClickListener {
+            finishWithDestination()
+        }
+    }
+
+    private fun finishWithDestination() {
+        if (intent.getBooleanExtra(EXTRA_FINISH_TO_HOME, false)) {
+            XiaoyuAppGraph.get(this).preferences.onboardingCompleted = true
+            startActivity(Intent(this, VoiceHomeActivity::class.java))
+        }
+        finish()
     }
 
     override fun onResume() {
@@ -103,5 +119,9 @@ class BackgroundCheckActivity : AppCompatActivity() {
             }
         }
         return false
+    }
+
+    companion object {
+        const val EXTRA_FINISH_TO_HOME = "finish_to_home"
     }
 }

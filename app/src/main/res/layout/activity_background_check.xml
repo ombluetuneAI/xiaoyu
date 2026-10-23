@@ -14,4 +14,6 @@
     <Button android:id="@+id/btnJumpSettings" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="应用详情设置"/>
     <Button android:id="@+id/btnDone" style="@style/Widget.Material3.Button.OutlinedButton"
         android:layout_width="match_parent" android:layout_height="wrap_content" android:text="完成"/>
+    <Button android:id="@+id/btnLater" style="@style/Widget.Material3.Button.TextButton"
+        android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/keepalive_later"/>
 </LinearLayout>
