@@ -25,34 +25,32 @@ class PlayerActivity : AppCompatActivity() {
     private lateinit var graph: XiaoyuAppGraph
     private var playbackError = false
 
+    private lateinit var title: TextView
+    private lateinit var artist: TextView
+    private lateinit var cover: ImageView
+    private lateinit var progressBar: SeekBar
+    private lateinit var positionText: TextView
+    private lateinit var durationText: TextView
+    private lateinit var progressSection: View
+    private lateinit var transportBar: View
+    private lateinit var btnPlayPause: ImageButton
+    private lateinit var btnPrevious: ImageButton
+    private lateinit var btnNext: ImageButton
+    private lateinit var btnQueueOrRadio: ImageButton
+    private lateinit var btnMode: ImageButton
+    private lateinit var emptyStatePanel: View
+    private lateinit var errorStatePanel: View
+    private lateinit var errorMessage: TextView
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_player)
         graph = XiaoyuAppGraph.get(this)
-
-        val title = findViewById<TextView>(R.id.trackTitle)
-        val artist = findViewById<TextView>(R.id.trackArtist)
-        val cover = findViewById<ImageView>(R.id.coverArt)
-        val progressBar = findViewById<SeekBar>(R.id.progressBar)
-        val positionText = findViewById<TextView>(R.id.positionText)
-        val durationText = findViewById<TextView>(R.id.durationText)
-        val progressSection = findViewById<View>(R.id.progressSection)
-        val btnPlayPause = findViewById<ImageButton>(R.id.btnPlayPause)
-        val btnPrevious = findViewById<ImageButton>(R.id.btnPrevious)
-        val btnNext = findViewById<ImageButton>(R.id.btnNext)
-        val btnQueueOrRadio = findViewById<ImageButton>(R.id.btnQueueOrRadio)
-        val btnMode = findViewById<ImageButton>(R.id.btnMode)
-        val emptyStatePanel = findViewById<View>(R.id.emptyStatePanel)
-        val errorStatePanel = findViewById<View>(R.id.errorStatePanel)
-        val errorMessage = findViewById<TextView>(R.id.errorMessage)
+        bindViews()
 
         graph.playerFacade.onError = {
             playbackError = true
-            refreshUi(
-                title, artist, cover, progressBar, positionText, durationText, progressSection,
-                btnPlayPause, btnPrevious, btnNext, btnQueueOrRadio, btnMode,
-                emptyStatePanel, errorStatePanel, errorMessage,
-            )
+            runOnUiThread { refreshUi() }
         }
 
         findViewById<ImageButton>(R.id.btnBack).setOnClickListener { finish() }
@@ -66,51 +64,26 @@ class PlayerActivity : AppCompatActivity() {
             if (track != null) {
                 graph.playerFacade.playTrack(track, graph.queueManager.mode.value)
             }
-            refreshUi(
-                title, artist, cover, progressBar, positionText, durationText, progressSection,
-                btnPlayPause, btnPrevious, btnNext, btnQueueOrRadio, btnMode,
-                emptyStatePanel, errorStatePanel, errorMessage,
-            )
+            refreshUi()
         }
 
         btnPlayPause.setOnClickListener {
             if (graph.playerFacade.isPlaying()) graph.playerFacade.pauseForUserRequest() else graph.playerFacade.resume()
-            refreshUi(
-                title, artist, cover, progressBar, positionText, durationText, progressSection,
-                btnPlayPause, btnPrevious, btnNext, btnQueueOrRadio, btnMode,
-                emptyStatePanel, errorStatePanel, errorMessage,
-            )
+            refreshUi()
         }
         btnPrevious.setOnClickListener {
             val prev = graph.queueManager.previous()
             if (prev != null) graph.playerFacade.playTrack(prev, graph.queueManager.mode.value)
-            refreshUi(
-                title, artist, cover, progressBar, positionText, durationText, progressSection,
-                btnPlayPause, btnPrevious, btnNext, btnQueueOrRadio, btnMode,
-                emptyStatePanel, errorStatePanel, errorMessage,
-            )
+            refreshUi()
         }
         btnNext.setOnClickListener {
             val next = graph.queueManager.next()
             if (next != null) graph.playerFacade.playTrack(next, graph.queueManager.mode.value)
-            refreshUi(
-                title, artist, cover, progressBar, positionText, durationText, progressSection,
-                btnPlayPause, btnPrevious, btnNext, btnQueueOrRadio, btnMode,
-                emptyStatePanel, errorStatePanel, errorMessage,
-            )
+            refreshUi()
         }
         btnMode.setOnClickListener {
-            val mode = graph.queueManager.mode.value
-            if (mode == PlaybackMode.RADIO) {
-                switchRadioStation()
-            } else {
-                graph.queueManager.cycleOrderMode()
-                refreshUi(
-                    title, artist, cover, progressBar, positionText, durationText, progressSection,
-                    btnPlayPause, btnPrevious, btnNext, btnQueueOrRadio, btnMode,
-                    emptyStatePanel, errorStatePanel, errorMessage,
-                )
-            }
+            graph.queueManager.cycleOrderMode()
+            refreshUi()
         }
         btnQueueOrRadio.setOnClickListener {
             if (graph.queueManager.mode.value == PlaybackMode.RADIO) {
@@ -128,27 +101,16 @@ class PlayerActivity : AppCompatActivity() {
         })
 
         lifecycleScope.launch {
-            graph.queueManager.nowPlaying.collect {
-                refreshUi(
-                    title, artist, cover, progressBar, positionText, durationText, progressSection,
-                    btnPlayPause, btnPrevious, btnNext, btnQueueOrRadio, btnMode,
-                    emptyStatePanel, errorStatePanel, errorMessage,
-                )
-            }
+            graph.queueManager.nowPlaying.collect { refreshUi() }
         }
         lifecycleScope.launch {
-            graph.queueManager.orderMode.collect {
-                refreshUi(
-                    title, artist, cover, progressBar, positionText, durationText, progressSection,
-                    btnPlayPause, btnPrevious, btnNext, btnQueueOrRadio, btnMode,
-                    emptyStatePanel, errorStatePanel, errorMessage,
-                )
-            }
+            graph.queueManager.orderMode.collect { refreshUi() }
         }
         lifecycleScope.launch {
             while (isActive) {
-                val duration = graph.playerFacade.durationMs().coerceAtLeast(1L)
-                if (graph.queueManager.mode.value != PlaybackMode.RADIO) {
+                val track = graph.queueManager.currentTrack()
+                if (track != null && graph.queueManager.mode.value != PlaybackMode.RADIO) {
+                    val duration = graph.playerFacade.durationMs().coerceAtLeast(1L)
                     progressBar.max = duration.toInt()
                     progressBar.progress = graph.playerFacade.positionMs().toInt()
                     positionText.text = formatMs(graph.playerFacade.positionMs())
@@ -157,11 +119,26 @@ class PlayerActivity : AppCompatActivity() {
                 delay(500)
             }
         }
-        refreshUi(
-            title, artist, cover, progressBar, positionText, durationText, progressSection,
-            btnPlayPause, btnPrevious, btnNext, btnQueueOrRadio, btnMode,
-            emptyStatePanel, errorStatePanel, errorMessage,
-        )
+        refreshUi()
+    }
+
+    private fun bindViews() {
+        title = findViewById(R.id.trackTitle)
+        artist = findViewById(R.id.trackArtist)
+        cover = findViewById(R.id.coverArt)
+        progressBar = findViewById(R.id.progressBar)
+        positionText = findViewById(R.id.positionText)
+        durationText = findViewById(R.id.durationText)
+        progressSection = findViewById(R.id.progressSection)
+        transportBar = findViewById(R.id.transportBar)
+        btnPlayPause = findViewById(R.id.btnPlayPause)
+        btnPrevious = findViewById(R.id.btnPrevious)
+        btnNext = findViewById(R.id.btnNext)
+        btnQueueOrRadio = findViewById(R.id.btnQueueOrRadio)
+        btnMode = findViewById(R.id.btnMode)
+        emptyStatePanel = findViewById(R.id.emptyStatePanel)
+        errorStatePanel = findViewById(R.id.errorStatePanel)
+        errorMessage = findViewById(R.id.errorMessage)
     }
 
     private fun switchRadioStation() {
@@ -172,39 +149,33 @@ class PlayerActivity : AppCompatActivity() {
                 graph.queueManager.setQueue(result.tracks, result.mode, result.queueLabel)
                 graph.playerFacade.playTrack(result.tracks.first(), result.mode)
                 graph.mediaSessionManager.updateNotification()
+                refreshUi()
             }
         }
     }
 
-    private fun refreshUi(
-        title: TextView,
-        artist: TextView,
-        cover: ImageView,
-        progressBar: SeekBar,
-        positionText: TextView,
-        durationText: TextView,
-        progressSection: View,
-        btnPlayPause: ImageButton,
-        btnPrevious: ImageButton,
-        btnNext: ImageButton,
-        btnQueueOrRadio: ImageButton,
-        btnMode: ImageButton,
-        emptyStatePanel: View,
-        errorStatePanel: View,
-        errorMessage: TextView,
-    ) {
+    private fun refreshUi() {
         val track = graph.queueManager.currentTrack()
-        val mode = graph.queueManager.mode.value
-        val isRadio = mode == PlaybackMode.RADIO
+        val isRadio = graph.queueManager.mode.value == PlaybackMode.RADIO
 
         if (track == null) {
             emptyStatePanel.visibility = View.VISIBLE
             errorStatePanel.visibility = View.GONE
-            title.text = ""
+            cover.visibility = View.GONE
+            cover.setImageDrawable(null)
+            progressSection.visibility = View.GONE
+            transportBar.visibility = View.GONE
+            title.text = getString(R.string.player_empty)
             artist.text = ""
+            progressBar.progress = 0
+            positionText.text = ""
+            durationText.text = ""
             return
         }
+
         emptyStatePanel.visibility = View.GONE
+        cover.visibility = View.VISIBLE
+        transportBar.visibility = View.VISIBLE
 
         title.text = track.title
         artist.text = track.artist
@@ -237,16 +208,33 @@ class PlayerActivity : AppCompatActivity() {
         )
 
         if (isRadio) {
-            btnMode.setImageResource(R.drawable.ic_radio_tune)
+            btnMode.visibility = View.INVISIBLE
+            btnMode.isEnabled = false
+            btnMode.contentDescription = null
+            btnQueueOrRadio.visibility = View.VISIBLE
+            btnQueueOrRadio.isEnabled = true
             btnQueueOrRadio.setImageResource(R.drawable.ic_radio_tune)
-            btnQueueOrRadio.contentDescription = "换台"
+            btnQueueOrRadio.contentDescription = getString(R.string.player_radio_tune)
         } else {
+            btnMode.visibility = View.VISIBLE
+            btnMode.isEnabled = true
+            btnQueueOrRadio.visibility = View.VISIBLE
+            btnQueueOrRadio.isEnabled = true
             btnQueueOrRadio.setImageResource(R.drawable.ic_queue)
             btnQueueOrRadio.contentDescription = getString(R.string.queue_title)
             when (graph.queueManager.orderMode.value) {
-                QueueOrderMode.SEQUENTIAL -> btnMode.setImageResource(R.drawable.ic_repeat)
-                QueueOrderMode.SHUFFLE -> btnMode.setImageResource(R.drawable.ic_shuffle)
-                QueueOrderMode.LOOP_ONE -> btnMode.setImageResource(R.drawable.ic_repeat_one)
+                QueueOrderMode.SEQUENTIAL -> {
+                    btnMode.setImageResource(R.drawable.ic_sequential)
+                    btnMode.contentDescription = getString(R.string.player_mode_sequential)
+                }
+                QueueOrderMode.SHUFFLE -> {
+                    btnMode.setImageResource(R.drawable.ic_shuffle)
+                    btnMode.contentDescription = getString(R.string.player_mode)
+                }
+                QueueOrderMode.LOOP_ONE -> {
+                    btnMode.setImageResource(R.drawable.ic_repeat_one)
+                    btnMode.contentDescription = getString(R.string.player_mode)
+                }
             }
         }
     }

@@ -19,6 +19,8 @@
     <string name="player_pause">暂停</string>
     <string name="player_next">下一首</string>
     <string name="player_mode">播放模式</string>
+    <string name="player_mode_sequential">顺序播放</string>
+    <string name="player_radio_tune">换台</string>
     <string name="player_empty">当前没有在播曲目</string>
     <string name="player_back_home">返回首页</string>
     <string name="player_error">播放失败</string>
